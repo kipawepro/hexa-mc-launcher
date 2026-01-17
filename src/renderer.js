@@ -6,8 +6,60 @@ document.getElementById('close-btn').addEventListener('click', () => {
     window.api.close();
 });
 
+// Home Button Website Redirect
+const navHomeBtn = document.getElementById('nav-home-btn');
+if (navHomeBtn) {
+    navHomeBtn.addEventListener('click', () => {
+        // Redirect to HG Studio website
+        window.api.openExternal('https://hg.studio');
+    });
+}
+
 // Check Maintenance on Startup
 (async () => {
+    // Set Version
+    const appVersion = await window.api.getAppVersion();
+    const versionEl = document.getElementById('current-version');
+    if (versionEl) versionEl.innerText = appVersion;
+
+    // Hide header elements on Login Screen
+    document.querySelector('.user-profile-btn').style.visibility = 'hidden';
+    const gameNav = document.querySelector('.game-nav-container'); if(gameNav) gameNav.style.visibility = 'hidden';
+
+    // Auto-Login Check
+    const savedSession = localStorage.getItem('hg_session_token');
+    const savedUser = localStorage.getItem('hg_user_data');
+    
+    if (savedSession && savedUser) {
+        try {
+            const userData = JSON.parse(savedUser);
+            const sessionDate = localStorage.getItem('hg_session_date');
+            
+            // Check expiry (e.g., 3 days)
+            const MAX_AGE = 3 * 24 * 60 * 60 * 1000;
+            if (sessionDate && (Date.now() - parseInt(sessionDate)) < MAX_AGE) {
+                console.log("Auto-login triggered");
+                // TODO: Verify token with backend if possible, for now assume valid if not expired
+                // Ideally send to backend to verify: await window.api.verifySession(savedSession);
+                
+                // We need to restore the currentUser in main process too for launch to work
+                // Since main process memory is cleared on restart, we need to re-send user data to it.
+                // Or better: Let main process handle persistence. 
+                // BUT, since we are doing renderer-side logic mostly, let's just push it to main.
+                
+                await window.api.restoreSession(userData);
+                handleLoginSuccess(userData);
+                return; // Skip maintenance check if already logged in? Or check anyway?
+            } else {
+                console.log("Session expired");
+                localStorage.removeItem('hg_session_token');
+                localStorage.removeItem('hg_user_data');
+            }
+        } catch (e) {
+            console.error("Auto-login failed", e);
+        }
+    }
+
     try {
         const config = await window.api.getLauncherConfig();
         
@@ -35,6 +87,18 @@ const loginUser = document.getElementById('login-user');
 const loginPass = document.getElementById('login-pass');
 const loginError = document.getElementById('login-error');
 const microsoftLoginBtn = document.getElementById('microsoft-login-btn');
+
+// Toggle Stay Connected on text click
+const stayConnectedContainer = document.querySelector('.login-checkbox-container');
+const stayConnectedCheckbox = document.getElementById('stay-connected');
+if (stayConnectedContainer && stayConnectedCheckbox) {
+    stayConnectedContainer.addEventListener('click', (e) => {
+        // If click is not on the switch itself (which has its own handler via label/input)
+        if (!e.target.closest('.switch')) {
+            stayConnectedCheckbox.checked = !stayConnectedCheckbox.checked;
+        }
+    });
+}
 
 // Load saved identifier
 if (localStorage.getItem('savedIdentifier')) {
@@ -66,6 +130,20 @@ loginBtn.addEventListener('click', async () => {
 
         if (result.success) {
             localStorage.setItem('savedIdentifier', identifier);
+            
+            // Stay Connected Logic
+            const stayConnected = document.getElementById('stay-connected').checked;
+            if (stayConnected) {
+                // Generate a pseudo-token (identifier + timestamp base64) or just save user object
+                const token = btoa(identifier + Date.now());
+                localStorage.setItem('hg_session_token', token);
+                localStorage.setItem('hg_user_data', JSON.stringify(result.user));
+                localStorage.setItem('hg_session_date', Date.now().toString());
+            } else {
+                localStorage.removeItem('hg_session_token');
+                localStorage.removeItem('hg_user_data');
+            }
+
             handleLoginSuccess(result.user);
         } else {
             loginError.innerText = result.message;
@@ -96,24 +174,33 @@ function handleLoginSuccess(user) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('dashboard-screen').style.display = 'block';
 
-    // Update Profile Info
-    const userNameEl = document.getElementById('user-name');
-    userNameEl.innerText = user.username;
+    // Show header elements
+    document.querySelector('.user-profile-btn').style.visibility = 'visible';
+    if(document.querySelector('.game-nav-container')) document.querySelector('.game-nav-container').style.visibility = 'visible';
 
-    // Reset classes
-    userNameEl.classList.remove('role-owner', 'role-moderator', 'role-member');
-
-    // Add role class
-    if (user.role === 'owner') {
-        userNameEl.classList.add('role-owner');
-    } else if (user.role === 'moderator') {
-        userNameEl.classList.add('role-moderator');
-    } else {
-        userNameEl.classList.add('role-member');
+    // Update Profile Info (Header)
+    const userNameEl = document.getElementById('user-name-header');
+    if (userNameEl) {
+        userNameEl.innerText = user.username;
+    }
+    
+    // Update Profile Info (Settings Sidebar)
+    const settingUserNameEl = document.getElementById('setting-user-name');
+    if (settingUserNameEl) {
+        settingUserNameEl.innerText = user.username;
     }
 
-    // Use 'helm' for face + hat layer
-    document.getElementById('user-avatar').style.backgroundImage = `url('https://minotar.net/helm/${user.username}/100.png')`;
+    // Update Avatar (Header)
+    const userAvatarEl = document.getElementById('user-avatar-header');
+    if (userAvatarEl) {
+        userAvatarEl.style.backgroundImage = `url('https://minotar.net/helm/${user.username}/100.png')`;
+    }
+
+    // Update Avatar (Settings Sidebar)
+    const settingAvatarEl = document.getElementById('setting-user-avatar');
+    if (settingAvatarEl) {
+        settingAvatarEl.style.backgroundImage = `url('https://minotar.net/helm/${user.username}/100.png')`;
+    }
 }
 
 // Profile Dropdown Logic
@@ -142,11 +229,20 @@ dropdownSettings.addEventListener('click', () => {
 
 dropdownLogout.addEventListener('click', () => {
     // Clear saved data if needed (optional)
-    // localStorage.removeItem('savedIdentifier');
+    localStorage.removeItem('hg_session_token');
+    localStorage.removeItem('hg_user_data');
+    
+    // Also clear from main process
+    window.api.restoreSession(null); 
 
     // Hide Dashboard, Show Login
     document.getElementById('dashboard-screen').style.display = 'none';
     document.getElementById('login-screen').style.display = 'flex';
+
+    // Hide header elements
+    document.querySelector('.user-profile-btn').style.visibility = 'hidden';
+    if(document.querySelector('.game-nav-container')) document.querySelector('.game-nav-container').style.visibility = 'hidden';
+    profileDropdown.classList.remove('active');
 
     // Reset Login Button
     loginBtn.disabled = false;
@@ -277,17 +373,24 @@ settingsBtn.addEventListener('click', async () => {
     // Handle legacy "4G" format vs new "4096" MB format
     let ramMB = 4096;
     if (settings.maxRam) {
-        if (settings.maxRam.endsWith('G')) {
-            ramMB = parseInt(settings.maxRam) * 1024;
-        } else if (settings.maxRam.endsWith('M')) {
-            ramMB = parseInt(settings.maxRam);
-        } else {
-            ramMB = parseInt(settings.maxRam);
+        let ramMB = parseInt(settings.maxRam);
+        
+        // Validation: If saved RAM > system total, cap it
+        if (ramMB > sysInfo.totalMem / 1024 / 1024) {
+            ramMB = Math.floor(sysInfo.totalMem / 1024 / 1024);
         }
+        
+        // If slider max is less than total system (e.g. 16GB limit slider on 32GB system),
+        // we should probably increase slider max or just set value.
+        // For now, let's just set the value.
+        ramSlider.value = ramMB;
+    } else {
+         ramSlider.value = 4096;
     }
-
-    ramSlider.value = ramMB;
-    ramValue.innerText = ramMB;
+    
+    // Trigger visual update initially
+    const event = new Event('input');
+    ramSlider.dispatchEvent(event);
 
     // Java Paths
     javaPath17.value = settings.javaPath17 || settings.javaPath || '';
@@ -297,34 +400,173 @@ settingsBtn.addEventListener('click', async () => {
     jvmArgsInput.value = settings.jvmArgs || '';
 
     if (settings.resolution) {
-        resWidthInput.value = settings.resolution.width || 1280;
-        resHeightInput.value = settings.resolution.height || 720;
+        // Migration: If detected old default, swap to new default per user request
+        let w = parseInt(settings.resolution.width);
+        let h = parseInt(settings.resolution.height);
+        if(w === 1280 && h === 720) {
+            w = 854; h = 480;
+        }
+        resWidthInput.value = w || 854;
+        resHeightInput.value = h || 480;
+    } else {
+        resWidthInput.value = 854;
+        resHeightInput.value = 480;
     }
 
     fullscreenToggle.checked = settings.fullscreen || false;
     closeLauncherToggle.checked = settings.closeLauncher !== false; // Default true
     debugConsoleToggle.checked = settings.debugConsole || false;
 
-    // Switch Screens
+    // Innovation Fields
+    if(settings.autoConnectIP) document.getElementById('auto-connect-ip').value = settings.autoConnectIP;
+    if(settings.discordRPC !== undefined) document.getElementById('discord-rpc-toggle').checked = settings.discordRPC;
+
+    // Appearance Fields
+    if(settings.bgOpacity !== undefined) {
+        document.getElementById('bg-opacity-slider').value = settings.bgOpacity;
+        document.querySelector('.container').style.backgroundColor = `rgba(0, 0, 0, ${settings.bgOpacity / 100})`;
+    }
+    if(settings.roundedCorners === false) {
+        document.getElementById('rounded-corners-toggle').checked = false;
+        document.body.classList.add('sharp-corners');
+    } else {
+        document.getElementById('rounded-corners-toggle').checked = true;
+        document.body.classList.remove('sharp-corners');
+    }
+
+    // Preset Selection
+    const presets = document.querySelectorAll('.preset-btn');
+    if (settings.optimizationPreset) {
+        presets.forEach(p => {
+            if(p.id === settings.optimizationPreset) p.classList.add('active');
+            else p.classList.remove('active');
+        });
+    }
+
+    // Switch Screens (Use CSS Class for Layout Hygiene)
+    document.body.classList.add('settings-active');
+    
+    // Explicitly Hide Header Elements to prevent layout shift bugs
+    if(document.querySelector('.game-nav-container')) document.querySelector('.game-nav-container').style.display = 'none';
+    document.querySelector('.user-profile-btn').style.display = 'none';
+    
     dashboardScreen.style.display = 'none';
-    settingsScreen.style.display = 'block';
+    settingsScreen.style.display = 'flex'; 
 });
 
 // Close Settings (Back to Dashboard)
 closeSettingsBtn.addEventListener('click', () => {
+    document.body.classList.remove('settings-active');
+    
+    // Restore Header Elements
+    if(document.querySelector('.game-nav-container')) document.querySelector('.game-nav-container').style.display = 'flex';
+    document.querySelector('.user-profile-btn').style.display = 'flex';
+    
     settingsScreen.style.display = 'none';
     dashboardScreen.style.display = 'block';
 });
 
 // RAM Slider Update
-ramSlider.addEventListener('input', (e) => {
-    ramValue.innerText = e.target.value;
+const updateRamVisual = () => {
+    const min = parseInt(ramSlider.min);
+    const max = parseInt(ramSlider.max);
+    const val = parseInt(ramSlider.value);
+    const percentage = ((val - min) / (max - min)) * 100;
+    
+    // Update Slider Background Gradient
+    ramSlider.style.background = `linear-gradient(to right, var(--primary-pink) 0%, var(--primary-pink) ${percentage}%, #444 ${percentage}%, #444 100%)`;
+    
+    ramValue.innerText = val;
+};
+
+ramSlider.addEventListener('input', updateRamVisual);
+
+// Innovation: Presets Logic
+const presetQuality = document.getElementById('preset-quality');
+const presetBalanced = document.getElementById('preset-balanced');
+const presetPerformance = document.getElementById('preset-performance');
+const presets = [presetQuality, presetBalanced, presetPerformance];
+
+presets.forEach(btn => {
+    if(!btn) return;
+    btn.addEventListener('click', () => {
+        presets.forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Apply Logic
+        const totalMem = parseInt(sysRamTotal.innerText);
+        
+        if (btn.id === 'preset-performance') {
+            // Low RAM, Aggressive GC
+            ramSlider.value = Math.min(4096, totalMem * 0.5); 
+            jvmArgsInput.value = "-XX:+UseG1GC -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M";
+        } else if (btn.id === 'preset-balanced') {
+            // Standard
+            ramSlider.value = Math.min(6144, totalMem * 0.6);
+            jvmArgsInput.value = "";
+        } else if (btn.id === 'preset-quality') {
+            // High RAM
+            ramSlider.value = Math.min(8192, totalMem * 0.75);
+            jvmArgsInput.value = "-XX:+UseG1GC -XX:MaxGCPauseMillis=200";
+        }
+        
+        updateRamVisual();
+    });
 });
+
+// Innovation: Color Picker
+const colorOptions = document.querySelectorAll('.color-option');
+colorOptions.forEach(opt => {
+    opt.addEventListener('click', () => {
+        colorOptions.forEach(o => o.classList.remove('active'));
+        opt.classList.add('active');
+        const color = opt.getAttribute('data-color');
+        
+        // Update variable
+        document.documentElement.style.setProperty('--primary-pink', color);
+        // Also update any other theme vars
+        localStorage.setItem('theme-accent', color);
+    });
+});
+// Restore Theme
+const savedTheme = localStorage.getItem('theme-accent');
+if(savedTheme) {
+    document.documentElement.style.setProperty('--primary-pink', savedTheme);
+    colorOptions.forEach(o => {
+        if(o.getAttribute('data-color') === savedTheme) o.classList.add('active');
+    });
+}
+
+
+// Innovation: Opacity & Corners
+const bgOpacitySlider = document.getElementById('bg-opacity-slider');
+const roundedCornersToggle = document.getElementById('rounded-corners-toggle');
+
+if(bgOpacitySlider) {
+    bgOpacitySlider.addEventListener('input', () => {
+        const val = bgOpacitySlider.value / 100;
+        // Apply to main container
+        document.querySelector('.container').style.backgroundColor = `rgba(0, 0, 0, ${val})`;
+    });
+}
+if(roundedCornersToggle) {
+    roundedCornersToggle.addEventListener('change', () => {
+        if(roundedCornersToggle.checked) {
+            document.body.classList.remove('sharp-corners');
+        } else {
+            document.body.classList.add('sharp-corners');
+        }
+    });
+}
 
 // Save Settings
 saveSettingsBtn.addEventListener('click', async () => {
     saveSettingsBtn.innerText = "SAUVEGARDE...";
     saveSettingsBtn.disabled = true;
+
+    // Determine active preset
+    let activePresetId = null;
+    presets.forEach(p => { if(p.classList.contains('active')) activePresetId = p.id; });
 
     const newSettings = {
         minRam: '1024M',
@@ -340,7 +582,16 @@ saveSettingsBtn.addEventListener('click', async () => {
         },
         fullscreen: fullscreenToggle.checked,
         closeLauncher: closeLauncherToggle.checked,
-        debugConsole: debugConsoleToggle.checked
+        debugConsole: debugConsoleToggle.checked,
+        
+        // Innovation Data
+        autoConnectIP: document.getElementById('auto-connect-ip').value,
+        discordRPC: document.getElementById('discord-rpc-toggle').checked,
+        optimizationPreset: activePresetId,
+        
+        // Appearance Data
+        bgOpacity: document.getElementById('bg-opacity-slider').value,
+        roundedCorners: document.getElementById('rounded-corners-toggle').checked
     };
 
     const result = await window.api.saveSettings(newSettings);
@@ -348,6 +599,12 @@ saveSettingsBtn.addEventListener('click', async () => {
     if (result.success) {
         setTimeout(() => {
             // Return to dashboard on save
+            document.body.classList.remove('settings-active');
+            
+            // Restore Header Elements
+            if(document.querySelector('.game-nav-container')) document.querySelector('.game-nav-container').style.display = 'flex';
+            document.querySelector('.user-profile-btn').style.display = 'flex';
+
             settingsScreen.style.display = 'none';
             dashboardScreen.style.display = 'block';
 

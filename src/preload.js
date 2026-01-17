@@ -18,5 +18,7 @@ contextBridge.exposeInMainWorld('api', {
     installJava: (version) => ipcRenderer.invoke('install-java', version),
     testJava: (path) => ipcRenderer.invoke('test-java', path),
     detectJava: (version) => ipcRenderer.invoke('detect-java', version),
-    getLauncherConfig: () => ipcRenderer.invoke('get-launcher-config')
+    getLauncherConfig: () => ipcRenderer.invoke('get-launcher-config'),
+    restoreSession: (user) => ipcRenderer.invoke('restore-session', user),
+    getAppVersion: () => ipcRenderer.invoke('get-app-version')
 });

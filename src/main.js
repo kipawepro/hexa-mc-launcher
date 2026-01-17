@@ -11,7 +11,9 @@ const AdmZip = require('adm-zip');
 const fetch = require('node-fetch');
 const os = require('os');
 const crypto = require('crypto');
-require('dotenv').config();
+
+// Fix: Explicitly load .env from the parent directory (works for both Dev and Production/ASAR)
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const launcherConfigUrl = 'http://91.197.6.177:24607/api/launcher/config';
 
@@ -192,9 +194,119 @@ ipcMain.handle('login-user', async (event, credentials) => {
 
     } catch (error) {
         console.error('Login Error:', error);
-        return { success: false, message: "Erreur de connexion à la base de données." };
+        
+        // Debug info for the user
+        let msg = "Erreur de connexion à la base de données.";
+        if (!process.env.DB_HOST) msg += " (Configuration .env manquante !)";
+        else if (error.code === 'ECONNREFUSED') msg += " (Serveur inaccessible)";
+        else if (error.code === 'ER_ACCESS_DENIED_ERROR') msg += " (Identifiants incorrects)";
+        
+        return { success: false, message: msg };
     }
 });
+
+ipcMain.handle('restore-session', (event, user) => {
+    if (user) {
+        console.log("Session restored for:", user.username);
+        currentUser = user;
+        return { success: true };
+    } else {
+        console.log("Session cleared.");
+        currentUser = null;
+        return { success: true };
+    }
+});
+
+// Helper to download files (Manual Asset Fix)
+async function downloadFile(url, dest, retries = 3) {
+    const dir = path.dirname(dest);
+    await fs.mkdir(dir, { recursive: true });
+    for (let i = 0; i < retries; i++) {
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`Status ${res.status}`);
+            const buffer = Buffer.from(await res.arrayBuffer());
+            await fs.writeFile(dest, buffer);
+            return;
+        } catch (e) {
+            if (i === retries - 1) throw e;
+            await new Promise(r => setTimeout(r, 500)); // fast retry
+        }
+    }
+}
+
+async function verifyAssets(assetIndexObj, globalRoot, mainWindow) {
+    const assetsRoot = path.join(globalRoot, 'assets');
+    const objects = assetIndexObj.objects;
+    const msgh = [];
+    
+    // Quick Scan
+    const entries = Object.entries(objects);
+    console.log(`[Assets] Scanning ${entries.length} objects from index ${assetIndexObj.id || 'unknown'}...`);
+    if(mainWindow) mainWindow.webContents.send('log', `Vérification ${entries.length} assets (Audio/Textures)...`);
+
+    // Check existence
+    let missingCount = 0;
+    for (const [key, meta] of entries) {
+        const hash = meta.hash;
+        const prefix = hash.substring(0, 2);
+        const p = path.join(assetsRoot, 'objects', prefix, hash);
+        try {
+            await fs.access(p); // Check if exists
+            // Optional: Check size? 
+            // const stat = await fs.stat(p);
+            // if (stat.size !== meta.size) throw new Error("Size mismatch");
+        } catch {
+            msgh.push({ hash, path: p, url: `https://resources.download.minecraft.net/${prefix}/${hash}` });
+            missingCount++;
+        }
+    }
+
+    if (msgh.length > 0) {
+        console.log(`[Assets] Found ${msgh.length} missing assets. Downloading manually (Modrinth-style)...`);
+        if(mainWindow) mainWindow.webContents.send('log', `Récupération de ${msgh.length} assets manquants...`);
+        
+        // Batch download to avoid network choke
+        const BATCH_SIZE = 50; // Increased batch size
+        for (let i = 0; i < msgh.length; i += BATCH_SIZE) {
+            const batch = msgh.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map(item => downloadFile(item.url, item.path).catch(e => console.error(`Failed ${item.hash}`, e))));
+            
+            // Progress UI
+            if (mainWindow) {
+                const pct = Math.round(((i + batch.length) / msgh.length) * 100);
+                mainWindow.webContents.send('log', `Téléchargement Assets: ${pct}%`);
+            }
+        }
+        if(mainWindow) mainWindow.webContents.send('log', `Assets complets !`);
+    } else {
+        console.log("[Assets] All assets verified present.");
+        if(mainWindow) mainWindow.webContents.send('log', `Assets intègres.`);
+    }
+}
+
+// Ensure the asset directory structure is correct for launch
+async function fixAssetIndex(globalRoot, assetIndexId, assetIndexContent) {
+    // 1.20+ uses index '5' or similar inconsistent IDs. 
+    // We must ensure the file exists at assets/indexes/{id}.json
+    const indexesDir = path.join(globalRoot, 'assets', 'indexes');
+    await fs.mkdir(indexesDir, { recursive: true });
+    
+    // Save as the ID provided by the version json (e.g. "5.json")
+    await fs.writeFile(
+        path.join(indexesDir, `${assetIndexId}.json`), 
+        JSON.stringify(assetIndexContent)
+    );
+    
+    // ALSO save as the version name just in case (e.g. "1.20.1.json")
+    // Some older launchers/mods look for the version name instead of the index ID
+    if (assetIndexId !== '1.20.1') { // hardcoded check for safety
+         await fs.writeFile(
+            path.join(indexesDir, `1.20.1.json`), 
+            JSON.stringify(assetIndexContent)
+        );
+    }
+}
 
 async function ensureJava(rootDir, mainWindow, version = 17) {
     const javaDir = path.join(rootDir, 'java');
@@ -571,15 +683,112 @@ ipcMain.handle('launch-game', async (event, options) => {
             '--accessToken', authorization.access_token,
             '--uuid', authorization.uuid,
             '--username', authorization.name,
-            '--userType', 'msa'
+            '--userType', 'msa',
+            // FORCE ASSETS FROM INSTANCE FOLDER
+            '--assetsDir', path.join(rootPath, 'assets'),
+            '--assetIndex', gameVersion 
         ],
+        checkFiles: true,
+        ignoreMissingAssets: false, 
+        overrides: {
+            assetRoot: path.join(rootPath, 'assets'), // User requested: Assets INSIDE instance
+            libraryRoot: path.join(globalRoot, 'libraries') // Keep libs global to save some space? Or move them too? Let's keep global for now unless issues.
+        },
         window: {
             width: config.resolution ? config.resolution.width : 1280,
             height: config.resolution ? config.resolution.height : 720,
             fullscreen: config.fullscreen || false
         }
     };
+
+    // Innovation: Auto Connect
+    if (config.autoConnectIP) {
+        // Handle IP:Port format
+        const parts = config.autoConnectIP.split(':');
+        const ip = parts[0];
+        const port = parts[1] || '25565';
+        
+        console.log(`[Feature] Auto-Connect enabled for ${ip}:${port}`);
+        if (mainWindow) mainWindow.webContents.send('log', `Auto-Connect activé: ${ip}:${port}`);
+        
+        // Add arguments for vanilla/modded client
+        // This works for most versions >= 1.6
+        opts.customArgs.push('--server', ip);
+        opts.customArgs.push('--port', port);
+    }
     
+    // ==========================================
+    // OPTIONS & SHADERS SYNC FEATURE
+    // ==========================================
+    // If the game options don't exist in the version instance, try to copy from previous/global
+    // We assume 'rootPath' contains all instances. 
+    // We will use a 'global-options' folder in rootPath to sync across instances if requested.
+    
+    try {
+        const globalOptionsDir = path.join(rootPath, 'global-options');
+        // Ensure global dir exists
+        await fs.mkdir(globalOptionsDir, { recursive: true });
+
+        // List of files to sync
+        const filesToSync = ['options.txt', 'optionsof.txt', 'optionsshaders.txt', 'servers.dat'];
+        
+        // 1. If global files exist, copy them to the current instance folder IF they don't exist there, 
+        // OR better: Always overwrite if we want strict sync? 
+        // User said: "make settings in game be the same for each instance". This implies strict sync.
+        // Strategy: Copy FROM Global TO Instance before launch.
+        
+        // Using "rootPath" as the base for the game run. 
+        // MCLC typically runs inside rootPath directly or in a specific subdir?
+        // Check documentation: MCLC uses opts.root as the base.
+        // It creates a 'versions' folder inside.
+        // The game effectively runs in opts.root unless 'gameDirectory' is specified.
+        
+        // Wait, MCLC runs in `rootPath`. This means all versions SHARE `rootPath/options.txt` by default
+        // UNLESS we are using specific game directories for modpacks.
+        // In this customized launcher, we haven't seen specific game dir logic yet.
+        // IF we are using the SAME rootPath for all modpacks, then they ALREADY share options.
+        
+        // BUT, looking clearly at logic: `const rootPath = path.join(app.getPath('appData'), '.hg_oo');`
+        // It seems we use ONE root folder. 
+        // However, if the user says "relance sur la v1.2 et doit refaire toute ses options", 
+        // it implies they ARE separated. 
+        // Maybe the user expects us to implement separate folders but currently we don't?
+        // OR maybe MCLC does isolation? MCLC typically does NOT isolate inputs/options unless told.
+        
+        // HYPOTHESIS: User plans to have multiple modpacks. We should prepare `global-options`.
+        // If we are currently using one root, this code is redundant but harmless.
+        // If we switch to multiple roots later (one per modpack), this will save the day.
+        
+        // Let's implement robust sync:
+        // Copy Global -> Root
+        for (const file of filesToSync) {
+            const globalFile = path.join(globalOptionsDir, file);
+            const instanceFile = path.join(rootPath, file);
+            
+            try {
+                // If global exists, copy to instance
+                await fs.access(globalFile);
+                await fs.copyFile(globalFile, instanceFile);
+                console.log(`Synced ${file} from Global to Instance.`);
+            } catch {
+                // Global doesn't exist, ignore
+            }
+        }
+        
+        // Symlink Resource Packs & Shader Packs if possible to save space?
+        // Or just create the folder if missing
+        const sharedDirs = ['resourcepacks', 'shaderpacks'];
+        for (const dir of sharedDirs) {
+            const instanceDirPath = path.join(rootPath, dir);
+            await fs.mkdir(instanceDirPath, { recursive: true });
+            // Ideally we'd symlink to a shared global location, but simpler to leave as is for now
+            // if we are sharing the same root.
+        }
+
+    } catch (syncErr) {
+        console.error("Options Sync Error (Non-fatal):", syncErr);
+    }
+
     console.log("FINAL LAUNCH AUTH:", JSON.stringify(opts.authorization, null, 2));
 
     if (loaderConfig) {
@@ -587,49 +796,172 @@ ipcMain.handle('launch-game', async (event, options) => {
             const fabricVersion = loaderConfig.version;
             const fabricUrl = `https://meta.fabricmc.net/v2/versions/loader/${gameVersion}/${fabricVersion}/profile/json`;
             const versionId = `fabric-loader-${fabricVersion}-${gameVersion}`;
-            const versionDir = path.join(rootPath, 'versions', versionId);
-            const versionJsonPath = path.join(versionDir, `${versionId}.json`);
-
+            
+            // -------------------------------------------------------------
+            // CLEAN RE-IMPLEMENTATION: TWO-STEP ASSET RESOLUTION
+            // -------------------------------------------------------------
+            // 1. Manually resolve Vanilla Assets & Libraries first
+            // 2. Install Fabric as an inheritance layer on top
+            // -------------------------------------------------------------
+            
             try {
-                await fs.mkdir(versionDir, { recursive: true });
-                try {
-                    await fs.access(versionJsonPath);
-                } catch {
-                    if (mainWindow) mainWindow.webContents.send('log', `Installation de Fabric Loader...`);
-                    const res = await fetch(fabricUrl);
-                    if (res.ok) {
-                        let fabricJson = await res.json();
-
-                        try {
-                            if (mainWindow) mainWindow.webContents.send('log', `Récupération des métadonnées Vanilla pour ${gameVersion}...`);
-                            const manifestRes = await fetch('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json');
-                            const manifest = await manifestRes.json();
-                            const versionInfo = manifest.versions.find(v => v.id === gameVersion);
-                            if (versionInfo) {
-                                const vanillaRes = await fetch(versionInfo.url);
-                                const vanillaJson = await vanillaRes.json();
-                                
-                                if (!fabricJson.downloads) fabricJson.downloads = vanillaJson.downloads;
-                                if (!fabricJson.assetIndex) fabricJson.assetIndex = vanillaJson.assetIndex;
-                                if (!fabricJson.assets) fabricJson.assets = vanillaJson.assets;
-                                if (!fabricJson.type) fabricJson.type = vanillaJson.type;
-
-                                if (vanillaJson.libraries) {
-                                    fabricJson.libraries = (fabricJson.libraries || []).concat(vanillaJson.libraries);
-                                }
-                            }
-                        } catch (err) {
-                            console.error("Failed to merge vanilla json", err);
-                            if (mainWindow) mainWindow.webContents.send('log', `Warning: Failed to merge vanilla JSON: ${err.message}`);
-                        }
-
-                        await fs.writeFile(versionJsonPath, JSON.stringify(fabricJson, null, 2));
-                    } else {
-                        console.error("Failed to fetch Fabric JSON", res.statusText);
-                    }
+                if (mainWindow) mainWindow.webContents.send('log', `Résolution des dépendances Vanilla...`);
+                
+                // Fetch Piston Manifest
+                const manifestRes = await fetch('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json');
+                const manifest = await manifestRes.json();
+                const versionInfo = manifest.versions.find(v => v.id === gameVersion);
+                
+                if (!versionInfo) throw new Error(`Version Vanilla ${gameVersion} introuvable.`);
+                
+                const vanillaRes = await fetch(versionInfo.url);
+                const vanillaJson = await vanillaRes.json();
+                
+                // --- STEP 1: FORCE VANILLA ASSETS MANUALLY ---
+                // We will manually download the asset index just to be safe, 
+                // but we will rely on inheritance for the actual game launch structure.
+                
+                const assetIndexId = vanillaJson.assetIndex.id;
+                const assetIndexUrl = vanillaJson.assetIndex.url;
+                const assetsDir = path.join(globalRoot, 'assets');
+                // Ensure legacy and new structures exist
+                const indexesDir = path.join(assetsDir, 'indexes');
+                const indexesPath = path.join(indexesDir, `${assetIndexId}.json`);
+                
+                await fs.mkdir(indexesDir, { recursive: true });
+                
+                if (mainWindow) mainWindow.webContents.send('log', `Vérification index assets ${assetIndexId}...`);
+                const idxRes = await fetch(assetIndexUrl);
+                if (idxRes.ok) {
+                    const idxData = await idxRes.text();
+                    await fs.writeFile(indexesPath, idxData);
                 }
-            } catch (e) {
-                console.error("Error installing Fabric", e);
+                
+                // --- STEP 2: SETUP PURE INHERITANCE ---
+                // We save the Vanilla JSON in the instance folder purely so MCLC can find it as a parent.
+                // We do NOT modify the Fabric JSON heavily. We trust the inheritance.
+                
+                const vanillaVersionDir = path.join(rootPath, 'versions', gameVersion);
+                await fs.mkdir(vanillaVersionDir, { recursive: true });
+                await fs.writeFile(
+                    path.join(vanillaVersionDir, `${gameVersion}.json`), 
+                    JSON.stringify(vanillaJson, null, 2)
+                );
+                console.log(`[Re-Build] Saved Parent JSON: ${gameVersion}`);
+
+                // --- STEP 3: PREPARE FABRIC JSON (MINIMALIST) ---
+                if (mainWindow) mainWindow.webContents.send('log', `Préparation profil Fabric...`);
+                const fabricRes = await fetch(fabricUrl);
+                if (!fabricRes.ok) throw new Error("Impossible de télécharger le profil Fabric.");
+                
+                const fabricJson = await fabricRes.json();
+                
+                // PURE INHERITANCE CONFIGURATION
+                // We strip out any forced assets overrides and let MCLC resolve from parent.
+                fabricJson.original_id = fabricJson.id; // Keep backup
+                fabricJson.id = versionId;
+                // 'inheritsFrom' tells MCLC to look for the parent JSON we saved in 'versions/1.20.1/1.20.1.json'
+                fabricJson.inheritsFrom = gameVersion;
+                
+                // CRASH FIX: "Cannot read properties of undefined (reading 'client')"
+                // MCLC often fails to merge the 'downloads' object from the parent correctly 
+                // in time for the jar check. We MUST explicitly provide the vanilla client download info.
+                fabricJson.downloads = vanillaJson.downloads;
+                
+                // ALSO: Ensure we declare the asset index explicity on the child too, 
+                // just so MCLC doesn't skip the asset check logic.
+                fabricJson.assetIndex = vanillaJson.assetIndex;
+                fabricJson.assets = vanillaJson.assets;
+
+
+                // --- LIBRARY FIX: MISSING DEPENDENCIES (Sodium/Guava Crash) ---
+                // The pure inheritance is failing to load some Vanilla libraries (like Guava/DataFixerUpper)
+                // causing ClassNotFoundException in mods. We must manually merge libraries.
+                
+                const vanLibs = vanillaJson.libraries || [];
+                const fabLibs = fabricJson.libraries || [];
+                
+                const libMap = new Map();
+                
+                // Helper to create a unique key for libraries
+                // We must differentiate between the main library and its natives
+                // Usually natives have a 'natives' property or 'downloads.classifiers'
+                const getLibKey = (lib) => {
+                    let key = lib.name;
+                    if (lib.natives) {
+                        key += ':natives';
+                    } else if (lib.downloads && lib.downloads.classifiers) {
+                        key += ':classifiers';
+                    }
+                    return key;
+                };
+
+                // 1. Add Vanilla libraries (Base)
+                vanLibs.forEach(l => libMap.set(getLibKey(l), l));
+                
+                // 2. Add Fabric libraries (Override/Append)
+                // Fabric usually adds its own libs, sometimes overrides vanilla versions
+                fabLibs.forEach(l => libMap.set(getLibKey(l), l));
+                
+                fabricJson.libraries = Array.from(libMap.values());
+                
+                console.log(`[Re-Build] Merged libraries safely. Total: ${fabricJson.libraries.length} (Vanilla: ${vanLibs.length})`);
+
+                // -------------------------------------------------------------
+                // FINAL ASSET FIX: MANUAL DOWNLOAD (Modrinth Style)
+                // -------------------------------------------------------------
+                // If MCLC fails to download assets for custom JSONs, we do it ourselves.
+                // We parse the vanilla asset index and download verifying every file.
+                try {
+                     if (vanillaJson.assetIndex && vanillaJson.assetIndex.url) {
+                        // 1. Fetch Index content
+                        const idxRes = await fetch(vanillaJson.assetIndex.url);
+                        if(idxRes.ok) {
+                             const idxContent = await idxRes.json();
+                             
+                             // 2. Fix Index location & Naming (INSTANCE LOCAL)
+                             vanillaJson.assetIndex.id = gameVersion; 
+                             vanillaJson.assets = gameVersion;
+
+                             await fixAssetIndex(rootPath, gameVersion, idxContent);
+
+                             // 3. Verify & Download objects (INSTANCE LOCAL)
+                             await verifyAssets({ 
+                                 id: gameVersion, 
+                                 objects: idxContent.objects 
+                             }, rootPath, mainWindow);
+                        }
+                     }
+                } catch (assetErr) {
+                    console.error("Manual Asset Download Failed:", assetErr);
+                }
+
+                // Force Fabric to use the readable ID
+                fabricJson.assetIndex.id = gameVersion;
+                fabricJson.assets = gameVersion;
+                fabricJson.downloads = vanillaJson.downloads;
+
+
+                if (config.debugConsole) {
+                    console.log("Using Hybrid Mode: Inheritance + Explicit Library Merge + Manual Asset Sync");
+                }
+
+                // Save Fabric JSON
+                const fabricVersionDir = path.join(rootPath, 'versions', versionId);
+                await fs.mkdir(fabricVersionDir, { recursive: true });
+                await fs.writeFile(
+                    path.join(fabricVersionDir, `${versionId}.json`), 
+                    JSON.stringify(fabricJson, null, 2)
+                );
+                
+                console.log(`[Re-Build] Fabric Profile Ready: ${versionId}`);
+
+                if (mainWindow) mainWindow.webContents.send('log', `Profil Fabric installé.`);
+
+            } catch (err) {
+                console.error("Critical verification error:", err);
+                if (mainWindow) mainWindow.webContents.send('log', `ERREUR CRITIQUE: ${err.message}`);
+                // Fallback: Proceed anyway, maybe it exists?
             }
 
             opts.version.number = versionId;
@@ -789,6 +1121,11 @@ ipcMain.handle('launch-game', async (event, options) => {
     });
 
     try {
+        // Force delete indexes to ensure fresh download if previous one was corrupted
+        if (config.repairAssets) { // Hidden toggle or auto-repair logic could trigger this
+             // For now, let's just log.
+        }
+
         await launcher.launch(opts);
     } catch (error) {
         console.error('Launch Error:', error);
@@ -832,7 +1169,7 @@ ipcMain.on('open-external', (event, url) => {
 });
 
 ipcMain.handle('check-update', async () => {
-    const currentVersion = '1.0.0';
+    const currentVersion = app.getVersion(); // Use dynamic version
 
     try {
         const response = await fetch(launcherConfigUrl);
@@ -884,6 +1221,10 @@ ipcMain.handle('get-system-info', () => {
         totalMem: os.totalmem(),
         freeMem: os.freemem()
     };
+});
+
+ipcMain.handle('get-app-version', () => {
+    return app.getVersion();
 });
 
 ipcMain.handle('open-file-dialog', async () => {

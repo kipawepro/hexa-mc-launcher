@@ -3,6 +3,14 @@
         "/^node -e \"const msmc = require\\('msmc'\\); console\\.log\\(new msmc\\.Auth\\('select_profile'\\)\\);\"$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^Add-Content -Path \"c:\\\\Users\\\\hugob\\\\Documents\\\\GitHub\\\\hg\\.launcher\\\\src\\\\new_design\\.css\" -Value \"\n/\\* Small Switch for Login \\*/\n\\.switch\\.small \\{\n    width: 30px;\n    height: 16px;\n\\}\n\\.switch\\.small \\.slider:before \\{\n    height: 12px;\n    width: 12px;\n    left: 2px;\n    bottom: 2px;\n\\}\n\\.switch\\.small input:checked \\+ \\.slider:before \\{\n    transform: translateX\\(14px\\);\n\\}\n\\.checkbox-group\\.row \\{\n    display: flex;\n    align-items: center;\n\\}\n\\.checkbox-label\\.small \\{\n    font-size: 12px; \n    color: #ccc;\n\\}\n\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^dir src\\\\assets$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }
