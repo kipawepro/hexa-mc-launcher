@@ -1,0 +1,327 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>hg.studio minecraft</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-border">
+        <header>
+            <!-- Centered Notch -->
+            <div class="iphone-notch">
+                <span class="notch-content">HG.STUDIO</span>
+            </div>
+
+            <!-- Top Right Window Controls -->
+            <div class="window-controls-container">
+                <div class="window-controls">
+                    <button id="minimize-btn" title="Minimize"><i class="fas fa-minus"></i></button>
+                    <button id="close-btn" title="Close"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+        </header>
+
+        <div class="container">
+            <!-- Maintenance Screen -->
+            <div id="maintenance-screen" class="maintenance-container" style="display: none;">
+                <div class="maintenance-content">
+                    <div class="maintenance-icon">
+                        <i class="fas fa-tools"></i>
+                    </div>
+                    <h2>MAINTENANCE</h2>
+                    <p>Le launcher est actuellement en maintenance.</p>
+                    <p class="maintenance-sub">Revenez plus tard !</p>
+                </div>
+                <div class="maintenance-banners">
+                    <div class="banner-row row-1">
+                        <span>MAINTENANCE</span><span>MAINTENANCE</span><span>MAINTENANCE</span><span>MAINTENANCE</span>
+                    </div>
+                    <div class="banner-row row-2">
+                        <span>HG.STUDIO</span><span>HG.STUDIO</span><span>HG.STUDIO</span><span>HG.STUDIO</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Login Screen -->
+            <div id="login-screen" class="login-container">
+                <div class="login-box">
+                    <h2>Connexion</h2>
+                    <p>Utilisez votre compte HG Studio</p>
+                    <input type="text" id="login-user" placeholder="Email ou Pseudo">
+                    <input type="password" id="login-pass" placeholder="Mot de passe">
+                    <button id="login-btn">Se connecter</button>
+                    
+                    <div class="divider">
+                        <span>OU</span>
+                    </div>
+                    
+                    <button id="microsoft-login-btn" class="microsoft-btn">
+                        <div class="ms-logo">
+                            <span></span><span></span><span></span><span></span>
+                        </div>
+                        Se connecter avec Microsoft
+                    </button>
+
+                    <p id="login-error" class="error-msg"></p>
+                </div>
+            </div>
+
+            <!-- Loading Overlay -->
+            <div id="loading-overlay" class="loading-overlay" style="display: none;">
+                <div class="pig-container">
+                    <div class="pig-face">
+                        <div class="pig-snout"></div>
+                    </div>
+                </div>
+                <div class="loading-log" id="loading-log">Initializing...</div>
+            </div>
+
+            <!-- Dashboard Screen (Helios Style) -->
+            <div id="dashboard-screen" class="helios-dashboard" style="display: none;">
+
+                <!-- Top Left Logo -->
+                <div class="helios-logo">
+                    <div class="logo-circle">
+                        <img src="assets/logo.svg" alt="Logo">
+                    </div>
+                </div>
+
+                <!-- Top Right Profile -->
+                <div class="helios-profile" id="profile-trigger">
+                    <span class="helios-username" id="user-name">Steve</span>
+                    <div class="helios-avatar-container">
+                        <div class="helios-avatar" id="user-avatar"></div>
+                    </div>
+                    
+                    <!-- Dropdown Menu -->
+                    <div class="profile-dropdown" id="profile-dropdown">
+                        <div class="dropdown-item" id="dropdown-settings">
+                            <i class="fas fa-cog"></i> Paramètres du compte
+                        </div>
+                        <div class="dropdown-item danger" id="dropdown-logout">
+                            <i class="fas fa-sign-out-alt"></i> Déconnexion
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Sidebar Icons -->
+                <div class="helios-right-menu">
+                    <button id="settings-btn" class="icon-btn" title="Settings"><i class="fas fa-cog"></i></button>
+                    <button class="icon-btn" title="Links"><i class="fas fa-link"></i></button>
+                    <div class="spacer"></div>
+                    <button id="btn-instagram" class="icon-btn" title="Instagram"><i class="fab fa-instagram"></i></button>
+                    <button id="btn-tiktok" class="icon-btn" title="TikTok"><i class="fab fa-tiktok"></i></button>
+                    <button id="btn-discord" class="icon-btn" title="Discord"><i class="fab fa-discord"></i></button>
+                </div>
+
+                <!-- Bottom Bar -->
+                <div class="helios-bottom-bar">
+                    <div class="helios-status-group">
+                        <div class="status-item">
+                            <span class="label">PLAYERS</span><span class="value" id="player-count">--/--</span>
+                        </div>
+                        <div class="separator"></div>
+                        <div class="status-item">
+                            <span class="label">SERVER STATUS</span><span class="dot" id="server-status-dot"></span>
+                        </div>
+                    </div>
+
+
+
+                    <div class="helios-play-group">
+                        <button id="launch-btn" class="helios-play-btn">PLAY</button>
+                        <div class="separator"></div>
+                        <span class="server-name" id="modpack-name">Chargement...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Screen (Full Page) -->
+            <div id="settings-screen" class="settings-page" style="display: none;">
+                <div class="settings-container-full">
+                    <!-- Sidebar -->
+                    <div class="settings-sidebar">
+                        <div class="settings-title">PARAMÈTRES</div>
+                        <ul class="settings-nav">
+                            <li class="active" data-tab="tab-java">
+                                <i class="fab fa-java"></i> Java & Mémoire
+                            </li>
+                            <li data-tab="tab-game">
+                                <i class="fas fa-gamepad"></i> Jeu & Affichage
+                            </li>
+                            <li data-tab="tab-launcher">
+                                <i class="fas fa-rocket"></i> Launcher
+                            </li>
+                        </ul>
+                        <div class="settings-actions">
+                            <button id="save-settings-btn" class="save-btn">ENREGISTRER</button>
+                            <button id="close-settings-btn" class="cancel-btn">RETOUR</button>
+                        </div>
+                    </div>
+
+                    <!-- Content Area -->
+                    <div class="settings-content-area">
+
+                        <!-- Tab: Java & Memory -->
+                        <div id="tab-java" class="settings-tab active">
+                            <h2>Configuration Java</h2>
+                            <p class="tab-desc">Gérez la mémoire allouée et les versions de Java.</p>
+
+                            <div class="setting-group">
+                                <label>Mémoire RAM Allouée</label>
+                                <div class="ram-control-container">
+                                    <div class="ram-info">
+                                        <span>Total Système : <strong id="sys-ram-total">--</strong> MB</span>
+                                        <span>Alloué : <strong id="ram-value">4096</strong> MB</span>
+                                    </div>
+                                    <div class="slider-wrapper">
+                                        <div class="ram-track"></div>
+                                        <input type="range" id="ram-slider" min="1024" max="16384" step="512" value="4096">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="java-versions-list">
+                                <!-- Java 21 -->
+                                <div class="java-version-card">
+                                    <div class="java-card-header">
+                                        <span class="java-label">Java 21 location</span>
+                                    </div>
+                                    <div class="java-input-group">
+                                        <input type="text" id="java-path-21" placeholder="/path/to/java" readonly>
+                                    </div>
+                                    <div class="java-actions">
+                                        <button class="java-btn recommend" onclick="window.api.openExternal('https://adoptium.net')">
+                                            <i class="fas fa-download"></i> Install recommended
+                                        </button>
+                                        <button class="java-btn" id="detect-java-21"><i class="fas fa-search"></i> Detect</button>
+                                        <button class="java-btn" id="browse-java-21"><i class="fas fa-folder-open"></i> Browse</button>
+                                        <button class="java-btn" id="test-java-21"><i class="fas fa-play"></i> Test</button>
+                                    </div>
+                                </div>
+
+                                <!-- Java 17 (Main) -->
+                                <div class="java-version-card">
+                                    <div class="java-card-header">
+                                        <span class="java-label">Java 17 location (Recommandé 1.20.1)</span>
+                                    </div>
+                                    <div class="java-input-group">
+                                        <input type="text" id="java-path-17" placeholder="/path/to/java">
+                                    </div>
+                                    <div class="java-actions">
+                                        <button class="java-btn recommend" id="install-java-17">
+                                            <i class="fas fa-download"></i> Install recommended
+                                        </button>
+                                        <button class="java-btn" id="detect-java-17"><i class="fas fa-search"></i> Detect</button>
+                                        <button class="java-btn" id="browse-java-17"><i class="fas fa-folder-open"></i> Browse</button>
+                                        <button class="java-btn" id="test-java-17"><i class="fas fa-play"></i> Test</button>
+                                    </div>
+                                </div>
+
+                                <!-- Java 8 -->
+                                <div class="java-version-card">
+                                    <div class="java-card-header">
+                                        <span class="java-label">Java 8 location</span>
+                                    </div>
+                                    <div class="java-input-group">
+                                        <input type="text" id="java-path-8" placeholder="/path/to/java" readonly>
+                                    </div>
+                                    <div class="java-actions">
+                                        <button class="java-btn recommend" onclick="window.api.openExternal('https://adoptium.net')">
+                                            <i class="fas fa-download"></i> Install recommended
+                                        </button>
+                                        <button class="java-btn" id="detect-java-8"><i class="fas fa-search"></i> Detect</button>
+                                        <button class="java-btn" id="browse-java-8"><i class="fas fa-folder-open"></i> Browse</button>
+                                        <button class="java-btn" id="test-java-8"><i class="fas fa-play"></i> Test</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="setting-group" style="margin-top: 20px;">
+                                <label>Arguments JVM (Avancé)</label>
+                                <input type="text" id="jvm-args" placeholder="-XX:+UseG1GC ...">
+                            </div>
+                        </div>
+
+                        <!-- Tab: Game & Display -->
+                        <div id="tab-game" class="settings-tab">
+                            <h2>Jeu & Affichage</h2>
+                            <p class="tab-desc">Personnalisez la fenêtre de jeu.</p>
+
+                            <div class="setting-row">
+                                <div class="setting-group half">
+                                    <label>Largeur (px)</label>
+                                    <input type="number" id="res-width" value="1280">
+                                </div>
+                                <div class="setting-group half">
+                                    <label>Hauteur (px)</label>
+                                    <input type="number" id="res-height" value="720">
+                                </div>
+                            </div>
+
+                            <div class="setting-group checkbox-group">
+                                <label class="switch">
+                                    <input type="checkbox" id="fullscreen-toggle">
+                                    <span class="slider round"></span>
+                                </label>
+                                <span class="checkbox-label">Lancer en plein écran</span>
+                            </div>
+                        </div>
+
+                        <!-- Tab: Launcher -->
+                        <div id="tab-launcher" class="settings-tab">
+                            <h2>Options du Launcher</h2>
+                            <p class="tab-desc">Gérez les mises à jour et le comportement du launcher.</p>
+
+                            <div class="setting-card">
+                                <div class="setting-header">
+                                    <i class="fas fa-rocket"></i>
+                                    <span>Comportement</span>
+                                </div>
+                                <div class="setting-group checkbox-group">
+                                    <label class="switch">
+                                        <input type="checkbox" id="close-launcher-toggle" checked>
+                                        <span class="slider round"></span>
+                                    </label>
+                                    <span class="checkbox-label">Fermer le launcher après le lancement du jeu</span>
+                                </div>
+                                <div class="setting-group checkbox-group">
+                                    <label class="switch">
+                                        <input type="checkbox" id="debug-console-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                    <span class="checkbox-label">Afficher la console de jeu (Debug)</span>
+                                </div>
+                            </div>
+
+                            <div class="setting-card">
+                                <div class="setting-header">
+                                    <i class="fas fa-sync-alt"></i>
+                                    <span>Mises à jour</span>
+                                </div>
+                                <div class="update-section">
+                                    <div class="current-version">
+                                        <span class="label">Version actuelle :</span>
+                                        <span class="value" id="current-version">1.0.0</span>
+                                    </div>
+                                    <button id="check-update-btn" class="action-btn">
+                                        <i class="fas fa-search"></i> Vérifier les mises à jour
+                                    </button>
+                                    <p id="update-status" class="status-msg"></p>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>
