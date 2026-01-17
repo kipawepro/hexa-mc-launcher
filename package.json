@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Minecraft Launcher for HG Server",
   "main": "src/main.js",
+  "scripts": {
+    "start": "electron ."
+  },
   "author": "hg.oo",
   "license": "ISC",
   "dependencies": {
@@ -13,5 +16,8 @@
     "msmc": "^5.0.5",
     "mysql2": "^3.15.3",
     "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "electron": "^40.0.0"
   }
 }

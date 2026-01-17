@@ -4,8 +4,9 @@ const fs = require('fs').promises;
 const fsOriginal = require('fs');
 const { Client, Authenticator } = require('minecraft-launcher-core');
 const launcher = new Client();
-// const mysql = require('mysql2/promise'); // Removed for security
-// const bcrypt = require('bcryptjs'); // Removed for security
+const msmc = require("msmc");
+const mysql = require('mysql2/promise');
+const bcrypt = require('bcryptjs');
 const AdmZip = require('adm-zip');
 const fetch = require('node-fetch');
 const os = require('os');
@@ -28,20 +29,17 @@ if (process.defaultApp) {
     app.setAsDefaultProtocolClient('hg-launcher');
 }
 
-// Force Single Instance
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
     app.quit();
 } else {
     app.on('second-instance', (event, commandLine, workingDirectory) => {
-        // Someone tried to run a second instance, we should focus our window.
         if (mainWindow) {
             if (mainWindow.isMinimized()) mainWindow.restore();
             mainWindow.focus();
         }
 
-        // Handle Deep Link on Windows
         const url = commandLine.find(arg => arg.startsWith('hg-launcher://'));
         if (url) {
             handleDeepLink(url);
@@ -51,8 +49,7 @@ if (!gotTheLock) {
     app.whenReady().then(() => {
         createWindow();
 
-        // Create Tray
-        const iconPath = path.join(__dirname, 'assets', 'logo.ico'); // Ensure this exists or use a .ico/.png
+        const iconPath = path.join(__dirname, 'assets', 'logo.ico'); 
         const icon = nativeImage.createFromPath(iconPath);
         tray = new Tray(icon);
         const contextMenu = Menu.buildFromTemplate([
@@ -71,7 +68,6 @@ if (!gotTheLock) {
     });
 }
 
-// Handle Deep Link (macOS)
 app.on('open-url', (event, url) => {
     event.preventDefault();
     handleDeepLink(url);
@@ -105,37 +101,41 @@ function handleDeepLink(url) {
     }
 }
 
-// Helper to load config
 async function loadConfig() {
     try {
         const data = await fs.readFile(configPath, 'utf-8');
         return JSON.parse(data);
     } catch (error) {
-        // Default config
         return {
             minRam: '2G',
             maxRam: '4G',
             javaPath: '',
             jvmArgs: '',
-            resolution: { width: 1280, height: 720 },
+            resolution: { width: 854, height: 480 },
             fullscreen: false,
             closeLauncher: true
         };
     }
 }
 
-// Helper to save config
 async function saveConfig(config) {
     await fs.writeFile(configPath, JSON.stringify(config, null, 4));
 }
 
-// Database Connection Pool - REMOVED
-// const pool = mysql.createPool({ ... });
+const pool = mysql.createPool({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+});
 
 function createWindow() {
     mainWindow = new BrowserWindow({
-        width: 1100, // Stretched width
-        height: 650, // Slightly taller
+        width: 1100,
+        height: 650,
         frame: false,
         icon: path.join(__dirname, 'assets', 'logo.ico'),
         webPreferences: {
@@ -156,41 +156,46 @@ app.on('window-all-closed', () => {
     }
 });
 
-// Login Handler (Via Secure PHP Bridge)
 ipcMain.handle('login-user', async (event, credentials) => {
     const { identifier, password } = credentials;
 
     try {
-        // Use the secure PHP bridge on the domain
-        const response = await fetch('https://hgstudio.strator.gg/auth/login.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ identifier, password })
-        });
+        console.log('Login attempt for:', identifier);
+        const [rows] = await pool.execute(
+            'SELECT * FROM users WHERE email = ? OR minecraft_name = ?',
+            [identifier, identifier]
+        );
+        console.log('User found:', rows.length > 0);
 
-        const result = await response.json();
-
-        if (result.success) {
-            currentUser = {
-                id: result.user.id,
-                username: result.user.username,
-                uuid: result.user.uuid,
-                email: result.user.email,
-                role: result.user.role,
-                type: 'offline'
-            };
-            return { success: true, user: currentUser };
-        } else {
-            return { success: false, message: result.message || 'Erreur de connexion.' };
+        if (rows.length === 0) {
+            return { success: false, message: 'Utilisateur inconnu.' };
         }
 
+        const user = rows[0];
+        const match = await bcrypt.compare(password, user.password_hash);
+
+        if (!match) {
+            return { success: false, message: 'Mot de passe incorrect.' };
+        }
+
+        currentUser = {
+            id: user.id,
+            username: user.minecraft_name,
+            uuid: user.minecraft_uuid,
+            email: user.email,
+            role: user.role,
+            refreshToken: user.microsoft_refresh_token,
+            type: 'microsoft'
+        };
+
+        return { success: true, user: currentUser };
+
     } catch (error) {
-        console.error('API Login Error:', error);
-        return { success: false, message: "Impossible de contacter le serveur d'authentification." };
+        console.error('Login Error:', error);
+        return { success: false, message: "Erreur de connexion à la base de données." };
     }
 });
 
-// Helper to download Java
 async function ensureJava(rootDir, mainWindow, version = 17) {
     const javaDir = path.join(rootDir, 'java');
     const javaVerDir = path.join(javaDir, version.toString());
@@ -200,13 +205,11 @@ async function ensureJava(rootDir, mainWindow, version = 17) {
         await fs.access(javaExec);
         return javaExec;
     } catch (e) {
-        // Not found, proceed to download
     }
 
     if (mainWindow) mainWindow.webContents.send('log', `Downloading Java ${version}...`);
     console.log(`Downloading Java ${version}...`);
 
-    // API Endpoints for Adoptium
     const urls = {
         8: "https://api.adoptium.net/v3/binary/latest/8/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk",
         17: "https://api.adoptium.net/v3/binary/latest/17/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk",
@@ -239,15 +242,11 @@ async function ensureJava(rootDir, mainWindow, version = 17) {
 
     await fs.unlink(zipPath);
 
-    // Find the extracted folder (e.g., jdk-17.0.x, jdk8u...)
     const files = await fs.readdir(javaDir);
-    // Look for folder starting with jdk-version or jdkversion
     const jdkFolder = files.find(f => f.includes(`jdk-${version}`) || f.includes(`jdk${version}`));
 
     if (!jdkFolder) throw new Error(`Java extraction failed: JDK folder for ${version} not found`);
 
-    // Rename to simple version number
-    // If target exists, remove it first (shouldn't happen due to check above, but safety)
     try {
         await fs.rm(javaVerDir, { recursive: true, force: true });
     } catch (e) {}
@@ -257,7 +256,6 @@ async function ensureJava(rootDir, mainWindow, version = 17) {
     return javaExec;
 }
 
-// Install Java Handler
 ipcMain.handle('install-java', async (event, version) => {
     const rootPath = path.join(app.getPath('appData'), '.hg_oo');
     try {
@@ -269,7 +267,6 @@ ipcMain.handle('install-java', async (event, version) => {
     }
 });
 
-// Test Java Handler
 ipcMain.handle('test-java', async (event, javaPath) => {
     const { exec } = require('child_process');
     return new Promise((resolve) => {
@@ -277,14 +274,12 @@ ipcMain.handle('test-java', async (event, javaPath) => {
             if (error) {
                 resolve({ success: false, output: error.message });
             } else {
-                // Java version output is usually in stderr
                 resolve({ success: true, output: stderr || stdout });
             }
         });
     });
 });
 
-// Detect Java Handler
 ipcMain.handle('detect-java', async (event, version) => {
     const rootPath = path.join(app.getPath('appData'), '.hg_oo');
     const javaExec = path.join(rootPath, 'java', version.toString(), 'bin', 'java.exe');
@@ -296,7 +291,6 @@ ipcMain.handle('detect-java', async (event, version) => {
     }
 });
 
-// Get Launcher Config Handler
 ipcMain.handle('get-launcher-config', async () => {
     try {
         const response = await fetch(launcherConfigUrl);
@@ -309,7 +303,6 @@ ipcMain.handle('get-launcher-config', async () => {
     }
 });
 
-// Launch Game Handler
 ipcMain.handle('launch-game', async (event, options) => {
     console.log("Launch Game requested!");
     if (mainWindow) mainWindow.webContents.send('log', "Préparation du lancement...");
@@ -318,15 +311,151 @@ ipcMain.handle('launch-game', async (event, options) => {
         return { success: false, message: "Vous devez être connecté." };
     }
 
-    // Fetch config to get version
-    let gameVersion = "1.20.1"; // Default
+    if (currentUser.refreshToken) {
+        try {
+            if (mainWindow) mainWindow.webContents.send('log', "Rafraîchissement du token Microsoft...");
+            console.log("Refreshing Microsoft Token...");
+            
+            const clientId = process.env.AZURE_CLIENT_ID || "00000000402b5328";
+            const clientSecret = process.env.AZURE_CLIENT_SECRET;
+            
+            console.log("Using Client ID for refresh:", clientId === "00000000402b5328" ? "Default (MSMC)" : "Custom (From .env)");
+            if (clientSecret) console.log("Using Client Secret for refresh (Web App Flow)");
+
+            let msToken = null;
+            let newRefreshToken = null;
+
+            if (clientSecret) {
+                try {
+                    const params = new URLSearchParams();
+                    params.append('client_id', clientId);
+                    params.append('client_secret', clientSecret);
+                    params.append('refresh_token', currentUser.refreshToken);
+                    params.append('grant_type', 'refresh_token');
+
+                    console.log("Attempting manual refresh via Microsoft Graph...");
+                    const refreshRes = await fetch('https://login.live.com/oauth20_token.srf', {
+                        method: 'POST',
+                        body: params,
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                    });
+
+                    if (!refreshRes.ok) {
+                        const errText = await refreshRes.text();
+                        throw new Error(`Microsoft Refresh Error: ${refreshRes.status} ${refreshRes.statusText} - ${errText}`);
+                    }
+
+                    const refreshData = await refreshRes.json();
+                    msToken = refreshData.access_token;
+                    newRefreshToken = refreshData.refresh_token; 
+                    
+                    currentUser.refreshToken = newRefreshToken; 
+                    
+                } catch (manualErr) {
+                    console.error("Manual Refresh Failed, falling back to MSMC...", manualErr);
+                    throw manualErr;
+                }
+            }
+            
+            let mwAuth;
+            
+            if (msToken) {
+                 console.log("Authenticating with Xbox Live (Manual via Fetch)...");
+                 
+                 const rxboxlive = await fetch("https://user.auth.xboxlive.com/user/authenticate", {
+                    method: "post",
+                    body: JSON.stringify({
+                        Properties: {
+                            AuthMethod: "RPS",
+                            SiteName: "user.auth.xboxlive.com",
+                            RpsTicket: `d=${msToken}`, 
+                        },
+                        RelyingParty: "http://auth.xboxlive.com",
+                        TokenType: "JWT",
+                    }),
+                    headers: {
+                        "Content-Type": "application/json",
+                        Accept: "application/json",
+                    },
+                 });
+
+                 if (!rxboxlive.ok) {
+                     const err = await rxboxlive.text();
+                     throw new Error(`Xbox Live Auth Failed: ${rxboxlive.status} - ${err}`);
+                 }
+                 
+                 const xblToken = await rxboxlive.json();
+                 const dummyAuth = { emit: () => {} };
+                 const msTokenObj = { access_token: msToken, refresh_token: newRefreshToken };
+                 
+                 const xboxAuth = new msmc.Xbox(dummyAuth, msTokenObj, xblToken);
+                 const msmcUser = await xboxAuth.getMinecraft();
+                 mwAuth = msmcUser;
+                 
+            } else {
+                const msmcConfig = { client_id: clientId, prompt: "select_profile" };
+                const authManager = new msmc.Auth(msmcConfig);
+                const result = await authManager.refresh(currentUser.refreshToken);
+                mwAuth = result.getMinecraft();
+            }
+
+            console.log("Refreshed Auth Object:", JSON.stringify(mwAuth, null, 2));
+
+            const tokenHeader = mwAuth.getToken(true);
+            console.log("Normalized Token Header:", JSON.stringify(tokenHeader, null, 2));
+
+            if (tokenHeader.profile) {
+                currentUser.accessToken = tokenHeader.mcToken;
+                currentUser.uuid = tokenHeader.profile.id;
+                currentUser.username = tokenHeader.profile.name;
+                currentUser.type = 'microsoft';
+            } else {
+                currentUser.accessToken = mwAuth.mcToken || mwAuth.access_token;
+                currentUser.uuid = mwAuth.uuid || mwAuth.id;
+                currentUser.username = mwAuth.name || mwAuth.username;
+                currentUser.type = 'microsoft';
+            }
+            
+            console.log("Token refreshed successfully for:", currentUser.username, "UUID:", currentUser.uuid);
+        } catch (e) {
+            console.error("Token Refresh Failed:", e);
+            let errorMessage = e.message || "Erreur inconnue";
+            
+            if (e.response && typeof e.response.text === 'function') {
+                try {
+                    const errorBody = await e.response.text();
+                    console.error("Microsoft Error Body:", errorBody);
+                    errorMessage += ` | Details: ${errorBody}`;
+                } catch (readErr) {
+                    console.error("Could not read error body", readErr);
+                }
+            }
+
+            if (mainWindow) mainWindow.webContents.send('log', "Erreur authentification (Refresh): " + errorMessage);
+            
+            if (JSON.stringify(e).includes("invalid_client")) {
+                 console.error("HINT: The Refresh Token was likely generated with a different Azure Client ID.");
+                 console.error("Please ensure AZURE_CLIENT_ID in .env matches the one from your website.");
+            }
+            
+            return { success: false, message: "Impossible de rafraîchir la session Microsoft. Vérifiez votre configuration (.env)." };
+        }
+    } else {
+        if (currentUser.type !== 'microsoft' || !currentUser.accessToken) {
+            console.error("No refresh token and no valid session found.");
+            if (mainWindow) mainWindow.webContents.send('log', "Aucun token valide trouvé.");
+            return { success: false, message: "Erreur d'authentification: Session invalide/expirée." };
+        }
+    }
+
+    let gameVersion = "1.20.1";
     let loaderConfig = null;
     let activeModpack = null;
 
     try {
         console.log("Fetching config from", launcherConfigUrl);
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000); // 5s timeout
+        const timeout = setTimeout(() => controller.abort(), 5000); 
         
         const response = await fetch(launcherConfigUrl, { signal: controller.signal });
         clearTimeout(timeout);
@@ -352,26 +481,22 @@ ipcMain.handle('launch-game', async (event, options) => {
 
     const config = await loadConfig();
     const globalRoot = path.join(app.getPath('appData'), '.hg_oo');
-    let rootPath = globalRoot; // Default to global for vanilla
+    let rootPath = globalRoot; 
 
-    // Install Modpack if active
     if (activeModpack) {
         try {
             console.log("Active Modpack found:", activeModpack.name);
             if (mainWindow) mainWindow.webContents.send('log', `Modpack détecté: ${activeModpack.name}`);
 
-            // Create isolated instance directory
             const safeName = activeModpack.name.replace(/[^a-zA-Z0-9\-_]/g, '_');
             rootPath = path.join(globalRoot, 'instances', safeName);
             await fs.mkdir(rootPath, { recursive: true });
 
-            // Construct full URL if relative
             let modpackUrl = activeModpack.url;
             if (modpackUrl.startsWith('/')) {
                 modpackUrl = `http://91.197.6.177:24607${modpackUrl}`;
             }
             
-            // Encode URL to handle spaces
             modpackUrl = encodeURI(modpackUrl);
             
             const installResult = await installMrPack(modpackUrl, rootPath, mainWindow);
@@ -386,13 +511,10 @@ ipcMain.handle('launch-game', async (event, options) => {
         }
     }
 
-    // Ensure Java 17 is available (Default for 1.20.1)
     let javaPath = config.javaPath17 || config.javaPath;
 
-    // If not set or invalid, try to ensure it
     if (!javaPath) {
         try {
-            // Use globalRoot for Java to share it across instances
             javaPath = await ensureJava(globalRoot, mainWindow, 17);
         } catch (error) {
             console.error('Java Setup Error:', error);
@@ -402,36 +524,34 @@ ipcMain.handle('launch-game', async (event, options) => {
     }
 
     let authorization;
-    if (currentUser.type === 'microsoft') {
-        authorization = {
-            access_token: currentUser.accessToken,
-            client_token: currentUser.uuid,
-            uuid: currentUser.uuid,
-            name: currentUser.username,
-            user_properties: '{}',
-            meta: {
-                type: "msa",
-                demo: false
-            }
-        };
-    } else {
-        // Manual Offline Auth construction
-        authorization = {
-            access_token: currentUser.uuid,
-            client_token: currentUser.uuid,
-            uuid: currentUser.uuid,
-            name: currentUser.username,
-            user_properties: '{}',
-            meta: {
-                type: "mojang",
-                demo: false
-            }
-        };
+    
+    if (!currentUser.accessToken) {
+        console.error("Launch aborted: No access token available for user", currentUser.username);
+        if (mainWindow) mainWindow.webContents.send('log', "Erreur fatale: Token d'accès manquant.");
+        return { success: false, message: "Impossible de lancer le jeu : Session invalide (Token manquant)." };
     }
 
+    const formatUuid = (uuid) => {
+        if (uuid && uuid.length === 32) {
+            return uuid.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+        }
+        return uuid;
+    };
+
+    authorization = {
+        access_token: currentUser.accessToken,
+        client_token: formatUuid(currentUser.uuid),
+        uuid: formatUuid(currentUser.uuid),
+        name: currentUser.username,
+        user_properties: {},
+        meta: {
+            type: "msa", 
+            demo: false
+        }
+    };
+
     const opts = {
-        // clientPackage: null, // Removed to fix MCLC crash
-        authorization: authorization,
+        authorization: authorization, 
         root: rootPath,
         version: {
             number: gameVersion,
@@ -447,14 +567,21 @@ ipcMain.handle('launch-game', async (event, options) => {
             '-Dminecraft.launcher.version=1.0.0',
             ...(config.jvmArgs ? config.jvmArgs.split(' ') : [])
         ],
+        customLaunchArgs: [
+            '--accessToken', authorization.access_token,
+            '--uuid', authorization.uuid,
+            '--username', authorization.name,
+            '--userType', 'msa'
+        ],
         window: {
             width: config.resolution ? config.resolution.width : 1280,
             height: config.resolution ? config.resolution.height : 720,
             fullscreen: config.fullscreen || false
         }
     };
+    
+    console.log("FINAL LAUNCH AUTH:", JSON.stringify(opts.authorization, null, 2));
 
-    // Apply Loader Configuration
     if (loaderConfig) {
         if (loaderConfig.type === 'fabric') {
             const fabricVersion = loaderConfig.version;
@@ -465,7 +592,6 @@ ipcMain.handle('launch-game', async (event, options) => {
 
             try {
                 await fs.mkdir(versionDir, { recursive: true });
-                // Check if version JSON exists
                 try {
                     await fs.access(versionJsonPath);
                 } catch {
@@ -474,7 +600,6 @@ ipcMain.handle('launch-game', async (event, options) => {
                     if (res.ok) {
                         let fabricJson = await res.json();
 
-                        // FIX: Merge Vanilla JSON data to prevent MCLC crash (missing 'client' download)
                         try {
                             if (mainWindow) mainWindow.webContents.send('log', `Récupération des métadonnées Vanilla pour ${gameVersion}...`);
                             const manifestRes = await fetch('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json');
@@ -484,14 +609,11 @@ ipcMain.handle('launch-game', async (event, options) => {
                                 const vanillaRes = await fetch(versionInfo.url);
                                 const vanillaJson = await vanillaRes.json();
                                 
-                                // Merge critical fields if missing
                                 if (!fabricJson.downloads) fabricJson.downloads = vanillaJson.downloads;
                                 if (!fabricJson.assetIndex) fabricJson.assetIndex = vanillaJson.assetIndex;
                                 if (!fabricJson.assets) fabricJson.assets = vanillaJson.assets;
-                                // Ensure type is release to avoid snapshots issues if any
                                 if (!fabricJson.type) fabricJson.type = vanillaJson.type;
 
-                                // FIX: Merge libraries to ensure Vanilla libraries (Guava, LWJGL, etc.) are present
                                 if (vanillaJson.libraries) {
                                     fabricJson.libraries = (fabricJson.libraries || []).concat(vanillaJson.libraries);
                                 }
@@ -513,20 +635,6 @@ ipcMain.handle('launch-game', async (event, options) => {
             opts.version.number = versionId;
             opts.version.custom = versionId;
         } else if (loaderConfig.type === 'forge') {
-            // For Forge, MCLC can handle it if we provide the path to the installer or jar, 
-            // but modern Forge (1.13+) is complex.
-            // MCLC 3.x supports 'forge' option pointing to the forge jar or installer?
-            // Best bet for Forge is to use the 'forge' property with the path to the forge installer/jar
-            // AND let MCLC run the installer if needed.
-            
-            // However, automating Forge install from just a version number is tricky without a library.
-            // Let's assume for now we just set the version ID and hope it's installed or we can fetch the installer.
-            
-            // Simplified Forge handling:
-            // We need to download the Forge installer, run it (headless), or use MCLC's forge support.
-            // MCLC 'forge' option: "path to the forge jar".
-            
-            // Let's try to download the forge installer.
             const forgeVersion = `${gameVersion}-${loaderConfig.version}`;
             const forgeUrl = `https://maven.minecraftforge.net/net/minecraftforge/forge/${forgeVersion}/forge-${forgeVersion}-installer.jar`;
             const forgePath = path.join(rootPath, 'forge', `${forgeVersion}`, `forge-${forgeVersion}-installer.jar`);
@@ -552,7 +660,6 @@ ipcMain.handle('launch-game', async (event, options) => {
                 console.error("Error preparing Forge", e);
             }
         } else if (loaderConfig.type === 'quilt') {
-             // Similar to Fabric
             const quiltVersion = loaderConfig.version;
             const quiltUrl = `https://meta.quiltmc.org/v3/versions/loader/${gameVersion}/${quiltVersion}/profile/json`;
             const versionId = `quilt-loader-${quiltVersion}-${gameVersion}`;
@@ -583,7 +690,6 @@ ipcMain.handle('launch-game', async (event, options) => {
 
     if (mainWindow) mainWindow.webContents.send('log', `Starting Minecraft ${gameVersion}...`);
 
-    // DEBUG CONSOLE WINDOW
     let debugWindow = null;
     if (config.debugConsole) {
         debugWindow = new BrowserWindow({
@@ -619,8 +725,6 @@ ipcMain.handle('launch-game', async (event, options) => {
                 const container = document.getElementById('log-container');
                 window.electron = {
                     onLog: (callback) => {
-                        // We can't use ipcRenderer directly here easily without preload, 
-                        // but we can use executeJavaScript to append logs.
                     }
                 };
             </script>
@@ -635,10 +739,8 @@ ipcMain.handle('launch-game', async (event, options) => {
         });
     }
 
-    // Helper to send logs to debug window
     const sendToDebug = (msg, type = 'info') => {
         if (debugWindow && !debugWindow.isDestroyed()) {
-            // Escape backticks and backslashes for JS string
             const safeMsg = msg.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const js = `
                 (function() {
@@ -654,7 +756,6 @@ ipcMain.handle('launch-game', async (event, options) => {
         }
     };
 
-    // ATTACH LISTENERS BEFORE LAUNCH
     launcher.on('debug', (e) => {
         console.log('[DEBUG]', e);
         if (mainWindow) mainWindow.webContents.send('log', `[DEBUG] ${e}`);
@@ -665,7 +766,6 @@ ipcMain.handle('launch-game', async (event, options) => {
         console.log('[DATA]', e);
         if (mainWindow) mainWindow.webContents.send('log', `[GAME] ${e}`);
         
-        // Simple heuristic for log coloring
         let type = 'info';
         const lower = e.toLowerCase();
         if (lower.includes('error') || lower.includes('exception') || lower.includes('fatal')) type = 'error';
@@ -703,7 +803,6 @@ ipcMain.handle('launch-game', async (event, options) => {
     return { success: true, message: "Lancement du jeu..." };
 });
 
-// Settings Handlers
 ipcMain.handle('get-settings', async () => {
     return await loadConfig();
 });
@@ -718,7 +817,6 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
     }
 });
 
-// Window Controls
 ipcMain.on('minimize-window', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     win.minimize();
@@ -729,12 +827,10 @@ ipcMain.on('close-window', (event) => {
     win.close();
 });
 
-// Open External Link
 ipcMain.on('open-external', (event, url) => {
     require('electron').shell.openExternal(url);
 });
 
-// Update Checker
 ipcMain.handle('check-update', async () => {
     const currentVersion = '1.0.0';
 
@@ -758,7 +854,6 @@ ipcMain.handle('check-update', async () => {
     }
 });
 
-// Install Update Handler
 ipcMain.handle('install-update', async (event, url) => {
     const tempPath = path.join(app.getPath('temp'), 'launcher-setup.exe');
     
@@ -773,10 +868,8 @@ ipcMain.handle('install-update', async (event, url) => {
             fileStream.on('finish', resolve);
         });
         
-        // Run the installer
         require('electron').shell.openPath(tempPath);
         
-        // Quit the launcher to allow update
         setTimeout(() => app.quit(), 1000);
         
         return { success: true };
@@ -786,7 +879,6 @@ ipcMain.handle('install-update', async (event, url) => {
     }
 });
 
-// Get System Info
 ipcMain.handle('get-system-info', () => {
     return {
         totalMem: os.totalmem(),
@@ -794,7 +886,6 @@ ipcMain.handle('get-system-info', () => {
     };
 });
 
-// File Dialog Handler
 ipcMain.handle('open-file-dialog', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
         properties: ['openFile'],
@@ -815,7 +906,6 @@ async function installMrPack(url, installPath, mainWindow) {
     try {
         await fs.mkdir(tempDir, { recursive: true });
         
-        // 1. Download .mrpack
         if (mainWindow) mainWindow.webContents.send('log', `Téléchargement du modpack...`);
         console.log("Downloading modpack from", url);
         
@@ -828,17 +918,14 @@ async function installMrPack(url, installPath, mainWindow) {
             fileStream.on("finish", resolve);
         });
 
-        // 2. Extract .mrpack
         if (mainWindow) mainWindow.webContents.send('log', `Extraction du modpack...`);
         const zip = new AdmZip(packPath);
         zip.extractAllTo(tempDir, true);
 
-        // 3. Read modrinth.index.json
         const indexContent = await fs.readFile(path.join(tempDir, 'modrinth.index.json'), 'utf8');
         const index = JSON.parse(indexContent);
         const gameVersion = index.dependencies.minecraft;
         
-        // Detect Loader
         let loader = null;
         if (index.dependencies['fabric-loader']) {
             loader = { type: 'fabric', version: index.dependencies['fabric-loader'] };
@@ -850,7 +937,6 @@ async function installMrPack(url, installPath, mainWindow) {
             loader = { type: 'quilt', version: index.dependencies['quilt-loader'] };
         }
 
-        // 4. Download Files
         const files = index.files;
         const totalFiles = files.length;
         let downloaded = 0;
@@ -862,12 +948,10 @@ async function installMrPack(url, installPath, mainWindow) {
             const fileDir = path.dirname(filePath);
             await fs.mkdir(fileDir, { recursive: true });
 
-            // Check if file exists and verify hash
             let fileExists = false;
             try {
                 await fs.access(filePath);
                 
-                // Strict Hash Verification
                 if (file.hashes && file.hashes.sha1) {
                     const fileBuffer = await fs.readFile(filePath);
                     const hashSum = crypto.createHash('sha1');
@@ -885,18 +969,16 @@ async function installMrPack(url, installPath, mainWindow) {
                         fileExists = true;
                     }
                 } else {
-                    // Fallback if no hash/size info (unlikely for mrpack)
                     fileExists = true;
                 }
             } catch (e) {}
 
             if (!fileExists) {
                 const fileUrl = file.downloads[0];
-                // console.log("Downloading mod:", file.path); // Too verbose
                 const fileRes = await fetch(fileUrl);
                 if (!fileRes.ok) {
                     console.error(`Failed to download mod ${file.path}: ${fileRes.statusText}`);
-                    continue; // Skip or throw? Better to throw or warn.
+                    continue; 
                 }
                 const dest = fsOriginal.createWriteStream(filePath);
                 await new Promise((resolve, reject) => {
@@ -912,7 +994,6 @@ async function installMrPack(url, installPath, mainWindow) {
             }
         }
 
-        // 5. Copy Overrides
         const overridesDir = path.join(tempDir, 'overrides');
         async function copyDir(src, dest) {
             const entries = await fs.readdir(src, { withFileTypes: true });
@@ -933,7 +1014,6 @@ async function installMrPack(url, installPath, mainWindow) {
             if (mainWindow) mainWindow.webContents.send('log', `Installation des configurations...`);
             await copyDir(overridesDir, installPath);
         } catch (e) {
-            // No overrides
         }
 
         return { gameVersion, loader };
