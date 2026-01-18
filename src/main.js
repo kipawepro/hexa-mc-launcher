@@ -11,11 +11,70 @@ const AdmZip = require('adm-zip');
 const fetch = require('node-fetch');
 const os = require('os');
 const crypto = require('crypto');
+const DiscordRPC = require('discord-rpc');
 
 // Fix: Explicitly load .env from the parent directory (works for both Dev and Production/ASAR)
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const launcherConfigUrl = 'http://91.197.6.177:24607/api/launcher/config';
+
+// DISCORD RPC CONFIG
+const rpcClientId = '1462409497116016682'; // REPLACE WITH YOUR DISCORD CLIENT ID
+let rpcClient = null;
+let rpcStarted = false;
+
+async function initRPC(enabled = true) {
+    if (!enabled) {
+        if (rpcClient) {
+            rpcClient.destroy();
+            rpcClient = null;
+            rpcStarted = false;
+        }
+        return;
+    }
+
+    if (rpcStarted) return;
+
+    rpcClient = new DiscordRPC.Client({ transport: 'ipc' });
+
+    rpcClient.on('ready', () => {
+        rpcStarted = true;
+        setRPCActivity({
+            details: 'Dans les menus',
+            state: 'HG Studio Launcher',
+            largeImageKey: 'logo', // Ensure you have this aseet in Discord Dev Portal or remove
+            largeImageText: 'HG Launcher',
+            smallImageKey: 'logo',
+            smallImageText: 'V2.0.0'
+        });
+    });
+
+    try {
+        await rpcClient.login({ clientId: rpcClientId });
+    } catch (e) {
+        console.error("RPC Login Failed", e);
+    }
+}
+
+async function setRPCActivity(activity) {
+    if (!rpcClient || !rpcStarted) return;
+    try {
+        const startTimestamp = Date.now(); // Optional: maintain start time
+        
+        rpcClient.setActivity({
+            details: activity.details,
+            state: activity.state,
+            largeImageKey: activity.largeImageKey || 'logo',
+            largeImageText: activity.largeImageText || 'HG Launcher',
+            smallImageKey: activity.smallImageKey,
+            smallImageText: activity.smallImageText,
+            instance: false,
+            ...activity // Merge other props
+        });
+    } catch (e) {
+        console.error("RPC Set Activity Failed", e);
+    }
+}
 
 let currentUser = null;
 const configPath = path.join(app.getPath('userData'), 'config.json');
@@ -48,10 +107,18 @@ if (!gotTheLock) {
         }
     });
 
-    app.whenReady().then(() => {
+    app.whenReady().then(async () => {
+        // Initialize RPC (Async but don't block window creation)
+        loadConfig().then(config => {
+            // Default to true if undefined
+            if (config.discordRPC !== false) {
+                initRPC(true);
+            }
+        });
+
         createWindow();
 
-        const iconPath = path.join(__dirname, 'assets', 'logo.ico'); 
+        const iconPath = path.join(__dirname, 'assets', 'logo.ico');
         const icon = nativeImage.createFromPath(iconPath);
         tray = new Tray(icon);
         const contextMenu = Menu.buildFromTemplate([
@@ -1147,11 +1214,22 @@ ipcMain.handle('get-settings', async () => {
 ipcMain.handle('save-settings', async (event, newSettings) => {
     try {
         await saveConfig(newSettings);
+        
+        // Update RPC State immediately
+        if (newSettings.discordRPC !== undefined) {
+             await initRPC(newSettings.discordRPC);
+        }
+        
         return { success: true };
     } catch (error) {
         console.error('Failed to save settings:', error);
         return { success: false, message: "Erreur lors de la sauvegarde." };
     }
+});
+
+// RPC IPC Handler
+ipcMain.on('update-rpc', (event, activity) => {
+    setRPCActivity(activity);
 });
 
 ipcMain.on('minimize-window', (event) => {

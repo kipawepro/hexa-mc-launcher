@@ -22,6 +22,44 @@ if (navHomeBtn) {
     const versionEl = document.getElementById('current-version');
     if (versionEl) versionEl.innerText = appVersion;
 
+        // --- FORCED UPDATE POPUP CHECK (MOVED TO TOP) ---
+        try {
+            let updateCheck = await window.api.checkUpdate();
+            
+            // DEBUG: FORCE POPUP POUR TESTER LE DESIGN (A RETIRER PLUS TARD)
+            // Laissez cette ligne active tant que vous n'avez pas validé le design
+            updateCheck = { updateAvailable: true, version: "2.1.0 (TEST VISUEL)", url: "" }; 
+
+            if (updateCheck.updateAvailable) {
+                 const popup = document.getElementById('update-popup');
+                 const versionText = document.getElementById('popup-new-version');
+                 const updateBtn = document.getElementById('popup-update-btn');
+                 const statusText = document.getElementById('popup-update-status');
+                 
+                 if (popup) {
+                     popup.style.display = 'flex'; // SHOW POPUP
+                     if(versionText) versionText.innerText = updateCheck.version;
+                     
+                     updateBtn.addEventListener('click', async () => {
+                         updateBtn.disabled = true;
+                         updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> TELECHARGEMENT...';
+                         statusText.innerText = "Téléchargement et installation en cours...";
+                         
+                         try {
+                             await window.api.installUpdate(updateCheck.url);
+                         } catch (err) {
+                             statusText.innerText = "Erreur: " + err;
+                             updateBtn.disabled = false;
+                             updateBtn.innerHTML = '<i class="fas fa-redo"></i> RÉESSAYER';
+                         }
+                     });
+                     return; // STOP EVERYTHING ELSE - Block login and auto-login
+                 }
+            }
+        } catch (err) {
+            console.error("Update check failed:", err);
+        }
+
     // Hide header elements on Login Screen
     document.querySelector('.user-profile-btn').style.visibility = 'hidden';
     const gameNav = document.querySelector('.game-nav-container'); if(gameNav) gameNav.style.visibility = 'hidden';
@@ -76,8 +114,10 @@ if (navHomeBtn) {
             document.getElementById('maintenance-screen').style.display = 'flex';
             return; // Stop execution
         }
+
+
     } catch (e) {
-        console.error("Failed to check maintenance", e);
+        console.error("Failed to check maintenance/update", e);
     }
 })();
 
@@ -173,6 +213,14 @@ function handleLoginSuccess(user) {
     // Switch to Dashboard
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('dashboard-screen').style.display = 'block';
+
+    // RPC Update
+    window.api.updateRpc({
+        details: 'Dans les menus',
+        state: `Connecté: ${user.username}`,
+        largeImageKey: 'logo', 
+        largeImageText: 'HG Launcher'
+    });
 
     // Show header elements
     document.querySelector('.user-profile-btn').style.visibility = 'visible';
@@ -284,6 +332,15 @@ launchBtn.addEventListener('click', async () => {
     loadingLog.innerText = "INITIALISATION...";
 
     try {
+        // RPC Update
+        window.api.updateRpc({
+            details: 'Joue à Minecraft',
+            state: 'HG Studio',
+            startTimestamp: Date.now(),
+            largeImageKey: 'logo',
+            largeImageText: 'HG Studio'
+        });
+
         const result = await window.api.launchGame();
         console.log(result);
     } catch (error) {

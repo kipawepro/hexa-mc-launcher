@@ -419,6 +419,25 @@
         </div>
     </div>
 
+    <!-- Update Popup (Forced) -->
+    <div id="update-popup" class="update-popup-overlay" style="display: none;">
+        <div class="update-popup-content">
+            <div class="update-icon">
+                <i class="fas fa-cloud-download-alt"></i>
+            </div>
+            <h2>Mise à jour disponible !</h2>
+            <p>Une nouvelle version du launcher est disponible (<span id="popup-new-version">vX.X.X</span>).</p>
+            <p class="sub-text">Cette mise à jour est requise pour continuer à jouer.</p>
+            
+            <div class="popup-actions">
+                <button id="popup-update-btn" class="update-confirm-btn">
+                    <i class="fas fa-download"></i> INSTALLER MAINTENANT
+                </button>
+            </div>
+            <p id="popup-update-status" class="status-msg"></p>
+        </div>
+    </div>
+
     <script src="renderer.js"></script>
 </body>
 </html>
