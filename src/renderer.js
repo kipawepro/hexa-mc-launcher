@@ -36,14 +36,65 @@ if (navHomeBtn) {
                  const updateBtn = document.getElementById('popup-update-btn');
                  const statusText = document.getElementById('popup-update-status');
                  
+                 const closeBtn = document.getElementById('update-popup-close-btn');
+                 const notifyBtn = document.getElementById('update-notify-btn');
+
                  if (popup) {
-                     popup.style.display = 'flex'; // SHOW POPUP
+                     // SHOW POPUP
+                     popup.style.display = 'flex'; 
                      if(versionText) versionText.innerText = updateCheck.version;
                      
+                     // Show Notification Button whenever update is available
+                     if(notifyBtn) {
+                         notifyBtn.style.display = 'block';
+                         notifyBtn.addEventListener('click', () => {
+                             popup.style.display = 'flex';
+                         });
+                     }
+
+                     // Handle Close Logic
+                     if(closeBtn) {
+                         closeBtn.addEventListener('click', () => {
+                             popup.style.display = 'none';
+                         });
+                     }
+                     
+                     // Progress Listener
+                     window.api.on('update-progress', (progress) => {
+                        updateBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${progress}%`;
+                        statusText.innerText = `Téléchargement de la mise à jour : ${progress}%`;
+                        
+                        // Add visual bar if not exists
+                        let bar = document.getElementById('update-progress-bar');
+                        if (!bar) {
+                            bar = document.createElement('div');
+                            bar.id = 'update-progress-bar';
+                            bar.style.width = '100%';
+                            bar.style.height = '6px';
+                            bar.style.background = '#333';
+                            bar.style.borderRadius = '3px';
+                            bar.style.marginTop = '10px';
+                            bar.style.overflow = 'hidden';
+                            
+                            const fill = document.createElement('div');
+                            fill.id = 'update-progress-fill';
+                            fill.style.width = '0%';
+                            fill.style.height = '100%';
+                            fill.style.background = 'var(--primary-pink)';
+                            fill.style.transition = 'width 0.2s';
+                            
+                            bar.appendChild(fill);
+                            statusText.parentNode.insertBefore(bar, statusText.nextSibling);
+                        }
+                        
+                        const fill = document.getElementById('update-progress-fill');
+                        if (fill) fill.style.width = `${progress}%`;
+                     });
+
                      updateBtn.addEventListener('click', async () => {
                          updateBtn.disabled = true;
-                         updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> TELECHARGEMENT...';
-                         statusText.innerText = "Téléchargement et installation en cours...";
+                         updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PREPARATION...';
+                         statusText.innerText = "Démarrage du téléchargement...";
                          
                          try {
                              await window.api.installUpdate(updateCheck.url);
@@ -53,7 +104,9 @@ if (navHomeBtn) {
                              updateBtn.innerHTML = '<i class="fas fa-redo"></i> RÉESSAYER';
                          }
                      });
-                     return; // STOP EVERYTHING ELSE - Block login and auto-login
+                     
+                     // REMOVED: return; // STOP EVERYTHING ELSE
+                     // Now we allow the user to close the popup and continue using the launcher
                  }
             }
         } catch (err) {
@@ -900,3 +953,28 @@ function updateRamSliderVisuals() {
 ramSlider.addEventListener('input', updateRamSliderVisuals);
 // Init
 updateRamSliderVisuals();
+
+// =========================================
+// MAP SYSTEM (LIVE MAP)
+// =========================================
+const mapBtn = document.getElementById('btn-map');
+const mapScreen = document.getElementById('map-screen');
+const closeMapBtn = document.getElementById('close-map-btn');
+const mapIframe = document.getElementById('map-iframe');
+const MAP_URL = "https://badlands.mystrator.com/s/ffb5be70-4184-4fb9-8d7d-deafd87abadf/#overworld:1661:0:1168:10835:-1.6:0:0:0:perspective";
+
+if (mapBtn && mapScreen && closeMapBtn) {
+    mapBtn.addEventListener('click', () => {
+        mapScreen.style.display = 'flex';
+        // Lazy load & GPU safety
+        if (mapIframe && mapIframe.src !== MAP_URL) {
+             mapIframe.src = MAP_URL;
+        }
+    });
+
+    closeMapBtn.addEventListener('click', () => {
+        mapScreen.style.display = 'none';
+        // Clear iframe to free resources (RAM/GPU) for the game
+        if(mapIframe) mapIframe.src = 'about:blank';
+    });
+}

@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('api', {
     openExternal: (url) => ipcRenderer.send('open-external', url),
     onAuthSuccess: (callback) => ipcRenderer.on('auth-success', (event, user) => callback(user)),
     onStopLoading: (callback) => ipcRenderer.on('stop-loading', () => callback()),
+    on: (channel, callback) => ipcRenderer.on(channel, (event, data) => callback(data)), // Adding generic ON for update-progress
     checkUpdate: () => ipcRenderer.invoke('check-update'),
     installUpdate: (url) => ipcRenderer.invoke('install-update', url),
     getSystemInfo: () => ipcRenderer.invoke('get-system-info'),

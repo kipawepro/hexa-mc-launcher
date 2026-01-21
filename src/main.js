@@ -468,7 +468,6 @@ ipcMain.handle('launch-game', async (event, options) => {
             if (mainWindow) mainWindow.webContents.send('log', "Rafraîchissement du token Microsoft (Via API Secure)...");
             console.log("Refreshing Microsoft Token via Auth API...");
 
-            // --- NOUVEAU SYSTEME SECURISE VIA PHP ---
             try {
                 const refreshRes = await fetch(AUTH_API_URL, {
                     method: 'POST',
@@ -486,7 +485,7 @@ ipcMain.handle('launch-game', async (event, options) => {
                     throw new Error("Echec du rafraichissement API: " + JSON.stringify(apiData));
                 }
                 
-                const refreshData = apiData.data; // La réponse de Microsoft relayée par le PHP
+                const refreshData = apiData.data;
                 
                 msToken = refreshData.access_token;
                 newRefreshToken = refreshData.refresh_token; 
@@ -659,7 +658,9 @@ ipcMain.handle('launch-game', async (event, options) => {
             console.log("Active Modpack found:", activeModpack.name);
             if (mainWindow) mainWindow.webContents.send('log', `Modpack détecté: ${activeModpack.name}`);
 
-            const safeName = activeModpack.name.replace(/[^a-zA-Z0-9\-_]/g, '_');
+            // CHANGE: Utiliser un nom de dossier FIXE pour permettre la mise à jour par écrasement
+            // Au lieu de créer un dossier par version (ex: HG_V1, HG_V2), on utilise "hg_studio_instance"
+            const safeName = "hg_studio_official"; // activeModpack.name.replace(/[^a-zA-Z0-9\-_]/g, '_');
             rootPath = path.join(globalRoot, 'instances', safeName);
             await fs.mkdir(rootPath, { recursive: true });
 
@@ -1087,6 +1088,21 @@ ipcMain.handle('launch-game', async (event, options) => {
         }
     }
 
+    // ANTI-CHEAT CHECK (Placed here to ensure rootPath is defined)
+    if (rootPath) {
+        // FIX: Clean corrupt (0-byte) libraries/versions before launch
+        if (mainWindow) mainWindow.webContents.send('log', `Vérification intégrité bibliothèques...`);
+        const librariesPath = path.join(globalRoot, 'libraries');
+        const versionsPath = path.join(rootPath, 'versions');
+        
+        await Promise.all([
+            removeZeroByteFiles(librariesPath),
+            removeZeroByteFiles(versionsPath)
+        ]);
+
+        await enforceAntiCheat(rootPath, mainWindow);
+    }
+
     console.log('Starting Minecraft for user:', currentUser.username);
     console.log('Launch Options:', JSON.stringify(opts, null, 2));
 
@@ -1279,16 +1295,57 @@ ipcMain.handle('install-update', async (event, url) => {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`Failed to download update: ${response.statusText}`);
         
+        const totalLength = response.headers.get('content-length');
         const fileStream = require('fs').createWriteStream(tempPath);
+        
         await new Promise((resolve, reject) => {
-            response.body.pipe(fileStream);
+            if (!totalLength) {
+                response.body.pipe(fileStream);
+                fileStream.on('finish', resolve);
+                fileStream.on('error', reject);
+                return;
+            }
+
+            let downloaded = 0;
+            const size = parseInt(totalLength, 10);
+            
+            response.body.on('data', (chunk) => {
+                downloaded += chunk.length;
+                fileStream.write(chunk);
+                const progress = (downloaded / size) * 100;
+                if (mainWindow) {
+                    mainWindow.webContents.send('update-progress', progress.toFixed(1));
+                }
+            });
+            
+            response.body.on('end', () => {
+                fileStream.end();
+                resolve();
+            });
+            
             response.body.on('error', reject);
-            fileStream.on('finish', resolve);
         });
         
-        require('electron').shell.openPath(tempPath);
+        // Auto-Restart Logic
+        const { spawn } = require('child_process');
+        const currentExe = process.execPath;
         
-        setTimeout(() => app.quit(), 1000);
+        // CMD Script: Wait 3s > Run Installer Silent > Wait for Installer > Start Launcher
+        // Note: 'start /wait' ensures we wait for the installer to finish before launching new app
+        const cmdArgs = [
+            '/C',
+            `timeout /t 3 & start /wait "" "${tempPath}" /S & start "" "${currentExe}"`
+        ];
+
+        const subprocess = spawn('cmd.exe', cmdArgs, {
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: true
+        });
+        
+        subprocess.unref();
+        
+        app.quit();
         
         return { success: true };
     } catch (error) {
@@ -1321,6 +1378,79 @@ ipcMain.handle('open-file-dialog', async () => {
     }
 });
 
+// HELPER: Recursive delete empty files
+async function removeZeroByteFiles(dir) {
+    try {
+        const items = await fs.readdir(dir);
+        for (const item of items) {
+            const fullPath = path.join(dir, item);
+            try {
+                const stat = await fs.stat(fullPath);
+                if (stat.isDirectory()) {
+                    await removeZeroByteFiles(fullPath);
+                } else if (stat.isFile() && stat.size === 0) {
+                    console.log(`[Fix] Deleting empty file: ${fullPath}`);
+                    await fs.unlink(fullPath);
+                }
+            } catch (e) {
+                // Ignore per-file errors
+            }
+        }
+    } catch (e) {
+        // Ignore dir errors (if doesn't exist)
+    }
+}
+
+async function enforceAntiCheat(installPath, mainWindow) {
+    console.log("[Anti-Cheat] Starting verification...");
+    if (mainWindow) mainWindow.webContents.send('log', "Anti-Cheat: Vérification des fichiers...");
+    
+    const whitelistPath = path.join(installPath, 'whitelist.json');
+    const modsPath = path.join(installPath, 'mods');
+
+    try {
+        // Enforce whitelist only if it exists
+        await fs.access(whitelistPath);
+        
+        const whitelistContent = await fs.readFile(whitelistPath, 'utf8');
+        const allowedMods = JSON.parse(whitelistContent);
+        
+        // Scan mods folder
+        try {
+            await fs.access(modsPath);
+            const files = await fs.readdir(modsPath);
+            
+            let deletedCount = 0;
+            for (const file of files) {
+                // Ignore .disabled files or directories if needed, but for X-Ray usually it's a jar
+                if (!file.endsWith('.jar')) continue;
+                
+                if (!allowedMods.includes(file)) {
+                    console.warn(`[Anti-Cheat] Unauthorized mod found: ${file}. Deleting...`);
+                    if (mainWindow) mainWindow.webContents.send('log', `Suppression mod interdit: ${file}`);
+                    
+                    await fs.unlink(path.join(modsPath, file));
+                    deletedCount++;
+                }
+            }
+            
+            if (deletedCount > 0) {
+                console.log(`[Anti-Cheat] Cleaned ${deletedCount} unauthorized mods.`);
+                if (mainWindow) mainWindow.webContents.send('log', `Anti-Cheat: ${deletedCount} fichiers supprimés.`);
+            } else {
+                console.log("[Anti-Cheat] Integrity verified. No unauthorized mods.");
+            }
+            
+        } catch (e) {
+            // mods folder might not exist yet if fresh install, which is fine
+        }
+
+    } catch (e) {
+        console.warn("[Anti-Cheat] Whitelist not found or error. Skipping check.", e.message);
+        // We do strictly nothing if whitelist is missing to avoid breaking dev/custom setups unexpectedly
+    }
+}
+
 async function installMrPack(url, installPath, mainWindow) {
     const tempDir = path.join(app.getPath('temp'), 'hg-launcher-modpack');
     const packPath = path.join(tempDir, 'modpack.mrpack');
@@ -1328,6 +1458,38 @@ async function installMrPack(url, installPath, mainWindow) {
     try {
         await fs.mkdir(tempDir, { recursive: true });
         
+        // -------------------------------------------------------------------------
+        // CLEANUP: Supprimer les anciens fichiers avant update (sauf whitelist)
+        // -------------------------------------------------------------------------
+        if (mainWindow) mainWindow.webContents.send('log', `Nettoyage de l'instance avant mise à jour...`);
+        
+        const preserveList = [
+            'options.txt', 
+            'servers.dat', 
+            'saves', 
+            'screenshots', 
+            'logs', 
+            'Distant_Horizons_server_data',
+            'resourcepacks', 
+            'shaderpacks',
+            'schematics',
+        ];
+
+        try {
+            const files = await fs.readdir(installPath);
+            for (const file of files) {
+                if (preserveList.includes(file)) continue;
+
+                // On supprime tout le reste (mods, config, versions, etc.) pour garantir une install propre
+                const fullPath = path.join(installPath, file);
+                await fs.rm(fullPath, { recursive: true, force: true });
+            }
+            console.log("Instance cleaned.");
+        } catch (e) {
+            console.warn("Cleanup warning (first run?):", e.message);
+        }
+        // -------------------------------------------------------------------------
+
         if (mainWindow) mainWindow.webContents.send('log', `Téléchargement du modpack...`);
         console.log("Downloading modpack from", url);
         
@@ -1365,8 +1527,17 @@ async function installMrPack(url, installPath, mainWindow) {
 
         if (mainWindow) mainWindow.webContents.send('log', `Vérification des ${totalFiles} mods...`);
 
+        // ANTI-CHEAT (WHITELIST PREPARATION)
+        const allowedMods = [];
+
         for (const file of files) {
             const filePath = path.join(installPath, file.path);
+            
+            // Add to allowed list (store relative path)
+            if (file.path.startsWith('mods/')) {
+                allowedMods.push(path.basename(file.path));
+            }
+            
             const fileDir = path.dirname(filePath);
             await fs.mkdir(fileDir, { recursive: true });
 
@@ -1414,6 +1585,15 @@ async function installMrPack(url, installPath, mainWindow) {
             if (mainWindow && downloaded % 5 === 0) {
                  mainWindow.webContents.send('log', `Vérification/Installation: ${downloaded}/${totalFiles}`);
             }
+        }
+
+        // SAVE WHITELIST FOR ANTI-CHEAT
+        try {
+            const whitelistPath = path.join(installPath, 'whitelist.json');
+            await fs.writeFile(whitelistPath, JSON.stringify(allowedMods, null, 2));
+            console.log(`[Anti-Cheat] Whitelist saved with ${allowedMods.length} mods.`);
+        } catch (e) {
+            console.error("Failed to save whitelist:", e);
         }
 
         const overridesDir = path.join(tempDir, 'overrides');

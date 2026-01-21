@@ -116,6 +116,7 @@
                 <div class="bottom-action-bar">
                     <!-- Left: Socials -->
                     <div class="social-group">
+                        <button id="btn-map" class="social-btn" title="LiveMap"><i class="fas fa-map"></i></button>
                         <button id="btn-discord" class="social-btn" title="Discord"><i class="fab fa-discord"></i></button>
                         <button id="btn-instagram" class="social-btn" title="Instagram"><i class="fab fa-instagram"></i></button>
                         <button id="btn-tiktok" class="social-btn" title="TikTok"><i class="fab fa-tiktok"></i></button>
@@ -415,9 +416,19 @@
         </div>
     </div>
 
+    <!-- Map Screen -->
+    <div id="map-screen" class="map-overlay" style="display: none;">
+        <div class="map-header">
+                <h2>Carte du Serveur</h2>
+                <button id="close-map-btn" class="close-action-btn"><i class="fas fa-times"></i></button>
+        </div>
+        <iframe id="map-iframe" src="" frameborder="0" class="map-frame"></iframe>
+    </div>
+
     <!-- Update Popup (Forced) -->
     <div id="update-popup" class="update-popup-overlay" style="display: none;">
         <div class="update-popup-content">
+            <button id="update-popup-close-btn" class="update-popup-close-btn"><i class="fas fa-times"></i></button>
             <div class="update-icon">
                 <i class="fas fa-cloud-download-alt"></i>
             </div>
@@ -436,6 +447,9 @@
 
     <!-- Window Controls (Global Overlay) -->
     <div class="window-controls-header">
+        <button id="update-notify-btn" title="Mise à jour disponible" style="display: none; color: var(--primary-pink); animation: pulse 2s infinite;">
+            <i class="fas fa-sync-alt"></i>
+        </button>
         <button id="minimize-btn" title="Minimize"><i class="fas fa-minus"></i></button>
         <button id="close-btn" title="Close"><i class="fas fa-times"></i></button>
     </div>
