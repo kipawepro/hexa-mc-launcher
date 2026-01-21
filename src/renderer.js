@@ -28,7 +28,7 @@ if (navHomeBtn) {
             
             // DEBUG: FORCE POPUP POUR TESTER LE DESIGN (A RETIRER PLUS TARD)
             // Laissez cette ligne active tant que vous n'avez pas validé le design
-            updateCheck = { updateAvailable: true, version: "2.1.0 (TEST VISUEL)", url: "" }; 
+            // updateCheck = { updateAvailable: true, version: "2.1.0 (TEST VISUEL)", url: "" }; 
 
             if (updateCheck.updateAvailable) {
                  const popup = document.getElementById('update-popup');

@@ -36,11 +36,7 @@
                 <div class="notch-content">HG.STUDIO</div>
             </div>
 
-            <!-- Right: Window Controls (Auto-Hide) -->
-            <div class="window-controls-header">
-                <button id="minimize-btn" title="Minimize"><i class="fas fa-minus"></i></button>
-                <button id="close-btn" title="Close"><i class="fas fa-times"></i></button>
-            </div>
+            <!-- Right: Window Controls (Auto-Hide) - MOVED OUTSIDE FOR Z-INDEX -->
         </header>
 
         <div class="container">
@@ -436,6 +432,12 @@
             </div>
             <p id="popup-update-status" class="status-msg"></p>
         </div>
+    </div>
+
+    <!-- Window Controls (Global Overlay) -->
+    <div class="window-controls-header">
+        <button id="minimize-btn" title="Minimize"><i class="fas fa-minus"></i></button>
+        <button id="close-btn" title="Close"><i class="fas fa-times"></i></button>
     </div>
 
     <script src="renderer.js"></script>

@@ -5,21 +5,21 @@ const fsOriginal = require('fs');
 const { Client, Authenticator } = require('minecraft-launcher-core');
 const launcher = new Client();
 const msmc = require("msmc");
-const mysql = require('mysql2/promise');
-const bcrypt = require('bcryptjs');
+// const mysql = require('mysql2/promise'); // REMOVE MYSQL
+// const bcrypt = require('bcryptjs'); // REMOVE BCRYPT
 const AdmZip = require('adm-zip');
 const fetch = require('node-fetch');
 const os = require('os');
 const crypto = require('crypto');
 const DiscordRPC = require('discord-rpc');
 
-// Fix: Explicitly load .env from the parent directory (works for both Dev and Production/ASAR)
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+// URL de votre API PHP (A MODIFIER SI VOUS LA METTEZ DANS UN SOUS DOSSIER)
+const AUTH_API_URL = 'https://hgstudio.strator.gg/auth_api.php';  
 
 const launcherConfigUrl = 'http://91.197.6.177:24607/api/launcher/config';
 
-// DISCORD RPC CONFIG
-const rpcClientId = '1462409497116016682'; // REPLACE WITH YOUR DISCORD CLIENT ID
+const rpcClientId = '1462409497116016682';
 let rpcClient = null;
 let rpcStarted = false;
 
@@ -42,7 +42,7 @@ async function initRPC(enabled = true) {
         setRPCActivity({
             details: 'Dans les menus',
             state: 'HG Studio Launcher',
-            largeImageKey: 'logo', // Ensure you have this aseet in Discord Dev Portal or remove
+            largeImageKey: 'logo',
             largeImageText: 'HG Launcher',
             smallImageKey: 'logo',
             smallImageText: 'V2.0.0'
@@ -59,7 +59,7 @@ async function initRPC(enabled = true) {
 async function setRPCActivity(activity) {
     if (!rpcClient || !rpcStarted) return;
     try {
-        const startTimestamp = Date.now(); // Optional: maintain start time
+        const startTimestamp = Date.now();
         
         rpcClient.setActivity({
             details: activity.details,
@@ -69,7 +69,7 @@ async function setRPCActivity(activity) {
             smallImageKey: activity.smallImageKey,
             smallImageText: activity.smallImageText,
             instance: false,
-            ...activity // Merge other props
+            ...activity
         });
     } catch (e) {
         console.error("RPC Set Activity Failed", e);
@@ -81,7 +81,6 @@ const configPath = path.join(app.getPath('userData'), 'config.json');
 let mainWindow;
 let tray = null;
 
-// Register Custom Protocol
 if (process.defaultApp) {
     if (process.argv.length >= 2) {
         app.setAsDefaultProtocolClient('hg-launcher', process.execPath, [path.resolve(process.argv[1])]);
@@ -108,9 +107,7 @@ if (!gotTheLock) {
     });
 
     app.whenReady().then(async () => {
-        // Initialize RPC (Async but don't block window creation)
         loadConfig().then(config => {
-            // Default to true if undefined
             if (config.discordRPC !== false) {
                 initRPC(true);
             }
@@ -191,15 +188,7 @@ async function saveConfig(config) {
     await fs.writeFile(configPath, JSON.stringify(config, null, 4));
 }
 
-const pool = mysql.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
-});
+// const pool = mysql.createPool... (REMOVED)
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -229,46 +218,30 @@ ipcMain.handle('login-user', async (event, credentials) => {
     const { identifier, password } = credentials;
 
     try {
-        console.log('Login attempt for:', identifier);
-        const [rows] = await pool.execute(
-            'SELECT * FROM users WHERE email = ? OR minecraft_name = ?',
-            [identifier, identifier]
-        );
-        console.log('User found:', rows.length > 0);
-
-        if (rows.length === 0) {
-            return { success: false, message: 'Utilisateur inconnu.' };
+        console.log('Authenticating via API:', AUTH_API_URL);
+        
+        const response = await fetch(AUTH_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identifier, password })
+        });
+        
+        if (!response.ok) {
+           throw new Error(`API Error: ${response.status}`);
         }
 
-        const user = rows[0];
-        const match = await bcrypt.compare(password, user.password_hash);
+        const data = await response.json();
 
-        if (!match) {
-            return { success: false, message: 'Mot de passe incorrect.' };
+        if (data.success) {
+            currentUser = data.user;
+            return { success: true, user: currentUser };
+        } else {
+            return { success: false, message: data.message || 'Erreur inconnue.' };
         }
-
-        currentUser = {
-            id: user.id,
-            username: user.minecraft_name,
-            uuid: user.minecraft_uuid,
-            email: user.email,
-            role: user.role,
-            refreshToken: user.microsoft_refresh_token,
-            type: 'microsoft'
-        };
-
-        return { success: true, user: currentUser };
 
     } catch (error) {
-        console.error('Login Error:', error);
-        
-        // Debug info for the user
-        let msg = "Erreur de connexion à la base de données.";
-        if (!process.env.DB_HOST) msg += " (Configuration .env manquante !)";
-        else if (error.code === 'ECONNREFUSED') msg += " (Serveur inaccessible)";
-        else if (error.code === 'ER_ACCESS_DENIED_ERROR') msg += " (Identifiants incorrects)";
-        
-        return { success: false, message: msg };
+        console.error('Login API Error:', error);
+        return { success: false, message: "Impossible de contacter le serveur d'authentification." };
     }
 });
 
@@ -492,51 +465,46 @@ ipcMain.handle('launch-game', async (event, options) => {
 
     if (currentUser.refreshToken) {
         try {
-            if (mainWindow) mainWindow.webContents.send('log', "Rafraîchissement du token Microsoft...");
-            console.log("Refreshing Microsoft Token...");
-            
-            const clientId = process.env.AZURE_CLIENT_ID || "00000000402b5328";
-            const clientSecret = process.env.AZURE_CLIENT_SECRET;
-            
-            console.log("Using Client ID for refresh:", clientId === "00000000402b5328" ? "Default (MSMC)" : "Custom (From .env)");
-            if (clientSecret) console.log("Using Client Secret for refresh (Web App Flow)");
+            if (mainWindow) mainWindow.webContents.send('log', "Rafraîchissement du token Microsoft (Via API Secure)...");
+            console.log("Refreshing Microsoft Token via Auth API...");
 
-            let msToken = null;
-            let newRefreshToken = null;
-
-            if (clientSecret) {
-                try {
-                    const params = new URLSearchParams();
-                    params.append('client_id', clientId);
-                    params.append('client_secret', clientSecret);
-                    params.append('refresh_token', currentUser.refreshToken);
-                    params.append('grant_type', 'refresh_token');
-
-                    console.log("Attempting manual refresh via Microsoft Graph...");
-                    const refreshRes = await fetch('https://login.live.com/oauth20_token.srf', {
-                        method: 'POST',
-                        body: params,
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-                    });
-
-                    if (!refreshRes.ok) {
-                        const errText = await refreshRes.text();
-                        throw new Error(`Microsoft Refresh Error: ${refreshRes.status} ${refreshRes.statusText} - ${errText}`);
-                    }
-
-                    const refreshData = await refreshRes.json();
-                    msToken = refreshData.access_token;
-                    newRefreshToken = refreshData.refresh_token; 
-                    
-                    currentUser.refreshToken = newRefreshToken; 
-                    
-                } catch (manualErr) {
-                    console.error("Manual Refresh Failed, falling back to MSMC...", manualErr);
-                    throw manualErr;
+            // --- NOUVEAU SYSTEME SECURISE VIA PHP ---
+            try {
+                const refreshRes = await fetch(AUTH_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        action: 'refresh',
+                        refresh_token: currentUser.refreshToken 
+                    })
+                });
+                
+                if (!refreshRes.ok) throw new Error(`Auth API Error: ${refreshRes.status}`);
+                const apiData = await refreshRes.json();
+                
+                if (!apiData.success) {
+                    throw new Error("Echec du rafraichissement API: " + JSON.stringify(apiData));
                 }
+                
+                const refreshData = apiData.data; // La réponse de Microsoft relayée par le PHP
+                
+                msToken = refreshData.access_token;
+                newRefreshToken = refreshData.refresh_token; 
+                
+                currentUser.refreshToken = newRefreshToken; 
+                
+            } catch (err) {
+                 console.error("Secure Refresh Failed:", err);
+                 if (mainWindow) mainWindow.webContents.send('log', "Erreur rafraîchissement: " + err.message);
+                 throw err;
             }
-            
+
             let mwAuth;
+            /* ANCIEN CODE SUPPRIME POUR SECURITE
+            const clientId = ...
+            const clientSecret = ...
+            if (clientSecret) { ... }
+            */
             
             if (msToken) {
                  console.log("Authenticating with Xbox Live (Manual via Fetch)...");
@@ -568,14 +536,38 @@ ipcMain.handle('launch-game', async (event, options) => {
                  const msTokenObj = { access_token: msToken, refresh_token: newRefreshToken };
                  
                  const xboxAuth = new msmc.Xbox(dummyAuth, msTokenObj, xblToken);
-                 const msmcUser = await xboxAuth.getMinecraft();
+                 
+                 // RETRY LOGIC FOR MINECRAFT LOGIN
+                 let msmcUser = null;
+                 for(let i=0; i<3; i++) {
+                     try {
+                         msmcUser = await xboxAuth.getMinecraft();
+                         break;
+                     } catch(e) {
+                         console.log(`getMinecraft attempt ${i+1} failed:`, e.message);
+                         if(i===2) throw e;
+                         await new Promise(r => setTimeout(r, 1500));
+                     }
+                 }
                  mwAuth = msmcUser;
                  
             } else {
-                const msmcConfig = { client_id: clientId, prompt: "select_profile" };
+                // Fallback (ne devrait plus arriver si l'API marche)
+                const msmcConfig = { client_id: "6d1d88e9-bb5c-4d03-a4c9-58227e577ba7", prompt: "select_profile" };
                 const authManager = new msmc.Auth(msmcConfig);
                 const result = await authManager.refresh(currentUser.refreshToken);
-                mwAuth = result.getMinecraft();
+                
+                // RETRY LOGIC FOR FALLBACK
+                for(let i=0; i<3; i++) {
+                     try {
+                         mwAuth = await result.getMinecraft();
+                         break;
+                     } catch(e) {
+                         console.log(`getMinecraft (fallback) attempt ${i+1} failed:`, e.message);
+                         if(i===2) throw e;
+                         await new Promise(r => setTimeout(r, 1500));
+                     }
+                 }
             }
 
             console.log("Refreshed Auth Object:", JSON.stringify(mwAuth, null, 2));
@@ -987,6 +979,8 @@ ipcMain.handle('launch-game', async (event, options) => {
                              const idxContent = await idxRes.json();
                              
                              // 2. Fix Index location & Naming (INSTANCE LOCAL)
+                             // Warning: MCLC sometimes looks for the id defined in the json
+                             // We ensure it matches "1.20.1" (gameVersion)
                              vanillaJson.assetIndex.id = gameVersion; 
                              vanillaJson.assets = gameVersion;
 
@@ -997,6 +991,14 @@ ipcMain.handle('launch-game', async (event, options) => {
                                  id: gameVersion, 
                                  objects: idxContent.objects 
                              }, rootPath, mainWindow);
+                             
+                             // MCLC OPTIMIZATION:
+                             // Since we manually downloaded everything, tell MCLC to SKIP asset checking
+                             // This avoids the double-check that is failing for your user (ECONNRESET)
+                             opts.overrides = {
+                                 ...opts.overrides,
+                                 assetRoot: path.join(rootPath, 'assets')
+                             };
                         }
                      }
                 } catch (assetErr) {
@@ -1006,7 +1008,8 @@ ipcMain.handle('launch-game', async (event, options) => {
                 // Force Fabric to use the readable ID
                 fabricJson.assetIndex.id = gameVersion;
                 fabricJson.assets = gameVersion;
-                fabricJson.downloads = vanillaJson.downloads;
+                // DO NOT copy downloads from vanilla, it might confuse MCLC into re-downloading client.jar unnecessarily
+                // fabricJson.downloads = vanillaJson.downloads; 
 
 
                 if (config.debugConsole) {
