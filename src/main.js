@@ -669,7 +669,8 @@ ipcMain.handle('launch-game', async (event, options) => {
                 modpackUrl = `http://91.197.6.177:24607${modpackUrl}`;
             }
             
-            modpackUrl = encodeURI(modpackUrl);
+            // ANTI-CACHE: Force fresh download
+            modpackUrl = encodeURI(modpackUrl) + `?t=${Date.now()}`;
             
             const installResult = await installMrPack(modpackUrl, rootPath, mainWindow);
             if (installResult) {
@@ -1289,14 +1290,18 @@ ipcMain.handle('check-update', async () => {
 });
 
 ipcMain.handle('install-update', async (event, url) => {
-    const tempPath = path.join(app.getPath('temp'), 'launcher-setup.exe');
+    const tempDir = app.getPath('temp');
+    const installerPath = path.join(tempDir, 'launcher-setup.exe');
+    const scriptPath = path.join(tempDir, 'update_script.bat');
     
     try {
+        if (mainWindow) mainWindow.webContents.send('log', "Téléchargement de la mise à jour...");
+        
         const response = await fetch(url);
         if (!response.ok) throw new Error(`Failed to download update: ${response.statusText}`);
         
         const totalLength = response.headers.get('content-length');
-        const fileStream = require('fs').createWriteStream(tempPath);
+        const fileStream = require('fs').createWriteStream(installerPath);
         
         await new Promise((resolve, reject) => {
             if (!totalLength) {
@@ -1326,21 +1331,33 @@ ipcMain.handle('install-update', async (event, url) => {
             response.body.on('error', reject);
         });
         
-        // Auto-Restart Logic
+        // Auto-Restart Logic via Batch Script
         const { spawn } = require('child_process');
         const currentExe = process.execPath;
         
-        // CMD Script: Wait 3s > Run Installer Silent > Wait for Installer > Start Launcher
-        // Note: 'start /wait' ensures we wait for the installer to finish before launching new app
-        const cmdArgs = [
-            '/C',
-            `timeout /t 3 & start /wait "" "${tempPath}" /S & start "" "${currentExe}"`
-        ];
+        // Create robust Batch file
+        // We use 'start "" /WAIT' to ensure installer finishes before restart attempts
+        // We don't use silent mode '/S' temporarily if debugging is needed, but user wanted it.
+        // Let's keep /S but remove windowsHide to see errors.
+        
+        const batchContent = `
+@echo off
+echo Attente de la fermeture du launcher...
+timeout /t 3 >nul
+echo Lancement de l'installation...
+start "" /WAIT "${installerPath}" /S
+echo Redemarrage...
+start "" "${currentExe}"
+exit
+`;
+        await fs.writeFile(scriptPath, batchContent);
 
-        const subprocess = spawn('cmd.exe', cmdArgs, {
+        console.log("Executing update script:", scriptPath);
+        
+        const subprocess = spawn('cmd.exe', ['/C', scriptPath], {
             detached: true,
-            stdio: 'ignore',
-            windowsHide: true
+            stdio: 'ignore', 
+            windowsHide: false // SHOW WINDOW so user can see what happens (Debug)
         });
         
         subprocess.unref();
@@ -1348,9 +1365,9 @@ ipcMain.handle('install-update', async (event, url) => {
         app.quit();
         
         return { success: true };
-    } catch (error) {
-        console.error('Update install failed:', error);
-        return { success: false, error: error.message };
+    } catch (err) {
+        console.error("Update failed:", err);
+        return { success: false, message: err.message };
     }
 });
 
@@ -1405,51 +1422,61 @@ async function enforceAntiCheat(installPath, mainWindow) {
     console.log("[Anti-Cheat] Starting verification...");
     if (mainWindow) mainWindow.webContents.send('log', "Anti-Cheat: Vérification des fichiers...");
     
-    const whitelistPath = path.join(installPath, 'whitelist.json');
+    // BLACKLIST MODE (Targeted removal only)
+    const forbiddenKeywords = ['xray', 'x-ray', 'killaura']; // Add keywords here
+    
     const modsPath = path.join(installPath, 'mods');
+    const resourcePacksPath = path.join(installPath, 'resourcepacks');
 
-    try {
-        // Enforce whitelist only if it exists
-        await fs.access(whitelistPath);
-        
-        const whitelistContent = await fs.readFile(whitelistPath, 'utf8');
-        const allowedMods = JSON.parse(whitelistContent);
-        
-        // Scan mods folder
+    const scanAndClean = async (dirPath) => {
         try {
-            await fs.access(modsPath);
-            const files = await fs.readdir(modsPath);
+            await fs.access(dirPath);
+            const files = await fs.readdir(dirPath);
             
             let deletedCount = 0;
             for (const file of files) {
-                // Ignore .disabled files or directories if needed, but for X-Ray usually it's a jar
-                if (!file.endsWith('.jar')) continue;
+                const lowerName = file.toLowerCase();
                 
-                if (!allowedMods.includes(file)) {
-                    console.warn(`[Anti-Cheat] Unauthorized mod found: ${file}. Deleting...`);
-                    if (mainWindow) mainWindow.webContents.send('log', `Suppression mod interdit: ${file}`);
+                // Check against forbidden keywords
+                const isForbidden = forbiddenKeywords.some(keyword => lowerName.includes(keyword));
+                
+                if (isForbidden) {
+                    console.warn(`[Anti-Cheat] Forbidden file found: ${file}. Deleting...`);
+                    if (mainWindow) mainWindow.webContents.send('log', `Suppression fichier interdit: ${file}`);
                     
-                    await fs.unlink(path.join(modsPath, file));
-                    deletedCount++;
+                    try {
+                        await fs.unlink(path.join(dirPath, file));
+                        deletedCount++;
+                    } catch (err) {
+                        console.error(`Failed to delete ${file}`, err);
+                    }
                 }
             }
-            
-            if (deletedCount > 0) {
-                console.log(`[Anti-Cheat] Cleaned ${deletedCount} unauthorized mods.`);
-                if (mainWindow) mainWindow.webContents.send('log', `Anti-Cheat: ${deletedCount} fichiers supprimés.`);
-            } else {
-                console.log("[Anti-Cheat] Integrity verified. No unauthorized mods.");
-            }
-            
+            return deletedCount;
         } catch (e) {
-            // mods folder might not exist yet if fresh install, which is fine
+            return 0; // Folder doesn't exist or error
+        }
+    };
+
+    try {
+        const deletedMods = await scanAndClean(modsPath);
+        const deletedPacks = await scanAndClean(resourcePacksPath);
+        
+        if (deletedMods + deletedPacks > 0) {
+             console.log(`[Anti-Cheat] Cleaned ${deletedMods + deletedPacks} forbidden items.`);
+        } else {
+             console.log("[Anti-Cheat] Status OK.");
         }
 
     } catch (e) {
-        console.warn("[Anti-Cheat] Whitelist not found or error. Skipping check.", e.message);
-        // We do strictly nothing if whitelist is missing to avoid breaking dev/custom setups unexpectedly
+        console.warn("[Anti-Cheat] Error during scan:", e.message);
     }
 }
+/* REMOVED STRICT WHITELIST
+async function unused_enforceAntiCheat(installPath, mainWindow) {
+    const whitelistPath = path.join(installPath, 'whitelist.json');
+    // ...
+}*/
 
 async function installMrPack(url, installPath, mainWindow) {
     const tempDir = path.join(app.getPath('temp'), 'hg-launcher-modpack');
@@ -1463,6 +1490,13 @@ async function installMrPack(url, installPath, mainWindow) {
         // -------------------------------------------------------------------------
         if (mainWindow) mainWindow.webContents.send('log', `Nettoyage de l'instance avant mise à jour...`);
         
+        // FORCE DELETE MODS FOLDER TO ENSURE CLEAN STATE
+        const modsFolder = path.join(installPath, 'mods');
+        try {
+            await fs.rm(modsFolder, { recursive: true, force: true });
+            console.log("Forced cleanup of mods folder.");
+        } catch (e) {}
+
         const preserveList = [
             'options.txt', 
             'servers.dat', 
@@ -1506,8 +1540,52 @@ async function installMrPack(url, installPath, mainWindow) {
         const zip = new AdmZip(packPath);
         zip.extractAllTo(tempDir, true);
 
+        // DEBUG: LOG ALL FILES IN OVERRIDES
+        try {
+            const overridesPath = path.join(tempDir, 'overrides');
+            if (require('fs').existsSync(overridesPath)) {
+                console.log("--- CONTENU DU DOSSIER OVERRIDES ---");
+                const glob = require('glob'); // Might not be available, let's use recursive readdir
+                const getAllFiles = (dir) => {
+                     let results = [];
+                     const list = require('fs').readdirSync(dir);
+                     list.forEach(file => {
+                         file = path.join(dir, file);
+                         const stat = require('fs').statSync(file);
+                         if (stat && stat.isDirectory()) {
+                             results = results.concat(getAllFiles(file));
+                         } else {
+                             results.push(file);
+                         }
+                     });
+                     return results;
+                }
+                const allOverrides = getAllFiles(overridesPath);
+                allOverrides.forEach(f => {
+                    if (f.includes('twilight')) {
+                        console.error("!!! COUPABLE TROUVÉ DANS OVERRIDES !!! ->", f);
+                        if (mainWindow) mainWindow.webContents.send('log', `⚠️ COUPABLE TROUVÉ DANS OVERRIDES: ${path.basename(f)}`);
+                    }
+                });
+                console.log("------------------------------------");
+            }
+        } catch (e) {
+            console.log("Error checking overrides:", e);
+        }
+
         const indexContent = await fs.readFile(path.join(tempDir, 'modrinth.index.json'), 'utf8');
         const index = JSON.parse(indexContent);
+        
+        // DEBUG: CHECK INDEX FILES
+        console.log("--- MODS DANS LE JSON ---");
+        index.files.forEach(f => {
+             if (f.path.includes('twilight')) {
+                 console.error("!!! COUPABLE TROUVÉ DANS INDEX.JSON !!! ->", f.path);
+                 if (mainWindow) mainWindow.webContents.send('log', `⚠️ COUPABLE TROUVÉ DANS JSON: ${f.path}`);
+             }
+        });
+        console.log("-------------------------");
+
         const gameVersion = index.dependencies.minecraft;
         
         let loader = null;
