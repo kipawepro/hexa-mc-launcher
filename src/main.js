@@ -1331,38 +1331,19 @@ ipcMain.handle('install-update', async (event, url) => {
             response.body.on('error', reject);
         });
         
-        // Auto-Restart Logic via Batch Script
+        // Launch Installer normally (User sees the window)
         const { spawn } = require('child_process');
-        const currentExe = process.execPath;
         
-        // Create robust Batch file
-        // We use 'start "" /WAIT' to ensure installer finishes before restart attempts
-        // We don't use silent mode '/S' temporarily if debugging is needed, but user wanted it.
-        // Let's keep /S but remove windowsHide to see errors.
-        
-        const batchContent = `
-@echo off
-echo Attente de la fermeture du launcher...
-timeout /t 3 >nul
-echo Lancement de l'installation...
-start "" /WAIT "${installerPath}" /S
-echo Redemarrage...
-start "" "${currentExe}"
-exit
-`;
-        await fs.writeFile(scriptPath, batchContent);
+        console.log("Spawning installer:", installerPath);
 
-        console.log("Executing update script:", scriptPath);
-        
-        const subprocess = spawn('cmd.exe', ['/C', scriptPath], {
+        const subprocess = spawn(installerPath, [], {
             detached: true,
-            stdio: 'ignore', 
-            windowsHide: false // SHOW WINDOW so user can see what happens (Debug)
+            stdio: 'ignore'
         });
         
         subprocess.unref();
         
-        app.quit();
+        app.quit(); // Close launcher so installer can overwrite files
         
         return { success: true };
     } catch (err) {
@@ -1480,6 +1461,17 @@ async function unused_enforceAntiCheat(installPath, mainWindow) {
 
 async function installMrPack(url, installPath, mainWindow) {
     const tempDir = path.join(app.getPath('temp'), 'hg-launcher-modpack');
+    
+    // CRITICAL FIX: NUKE TEMP DIR BEFORE DOWNLOAD
+    // If we don't do this, AdMZip extracts the new zip ON TOP of the old extracted files.
+    // Files removed from the new pack would REMAIN in tempDir and be re-installed.
+    try {
+        await fs.rm(tempDir, { recursive: true, force: true });
+        console.log("Temporary modpack folder cleared.");
+    } catch (e) {
+        console.warn("Could not clear temp dir (might be first run):", e.message);
+    }
+
     const packPath = path.join(tempDir, 'modpack.mrpack');
     
     try {
