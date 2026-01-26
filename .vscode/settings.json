@@ -11,6 +11,7 @@
         "/^dir src\\\\assets$/": {
             "approve": true,
             "matchCommandLine": true
-        }
+        },
+        "type": true
     }
 }
