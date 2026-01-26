@@ -507,10 +507,11 @@
     flex-direction: column;
     align-items: center;
     gap: 8px;
-    position: absolute; /* Force Absolute Center */
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: 30px;
+    /* REMOVED ABSOLUTE POSITIONING which was breaking the flow with center-column */
+    /* position: absolute; */
+    /* left: 50%; */
+    /* transform: translateX(-50%); */
+    /* bottom: 30px; */
 }
 
 .big-play-btn {
@@ -1381,5 +1382,109 @@ body.sharp-corners *::after {
 }
 .login-checkbox-container:active .switch.small .slider:before {
     width: 16px; /* Switch click animation */
+}
+
+/* =========================================
+   VERSION SELECTOR (Added for User Request)
+   ========================================= */
+.center-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end; /* Push content down */
+    gap: 16px;
+    
+    /* Position the entire column absolutely centered in the bar */
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 25px; /* Lift from bottom */
+    width: auto; /* width auto so it centers correctly */
+}
+
+.version-selector {
+    display: flex;
+    background: rgba(20, 20, 20, 0.85); /* Darker Background */
+    backdrop-filter: blur(16px);
+    border-radius: 100px; /* Pillow shape for better UI */
+    padding: 4px; 
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 
+        0 8px 32px rgba(0,0,0,0.4),
+        inset 0 1px 1px rgba(255,255,255,0.05);
+}
+
+.version-option {
+    padding: 8px 20px;
+    border-radius: 100px; /* Pillow shape */
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    color: #999;
+    letter-spacing: 0.5px;
+    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+    user-select: none;
+    border: 1px solid transparent;
+}
+
+.version-option:hover {
+    color: #ddd;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.version-option.active {
+    background: #333;
+    color: #fff;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    border-color: rgba(255,255,255,0.1);
+}
+
+/* Base "HG S1" specific active style */
+.version-option[data-version="base"].active {
+    background: linear-gradient(135deg, #333, #222);
+}
+
+/* Enhanced specific active style */
+.version-option[data-version="enhanced"].active {
+    background: linear-gradient(135deg, rgba(255, 50, 85, 0.2), rgba(255, 0, 50, 0.1));
+    border-color: rgba(255, 50, 85, 0.4);
+    box-shadow: 0 4px 15px rgba(255, 50, 85, 0.15);
+}
+
+.version-option[data-version="enhanced"].active span:first-child {
+    background: linear-gradient(90deg, #ff7eb3, #ff758c);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 2px 10px rgba(255, 50, 85, 0.3);
+}
+
+.badge-new {
+    background: linear-gradient(90deg, #ff758c, #ff7eb3);
+    color: #fff;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 5px rgba(255, 117, 140, 0.4);
+    text-transform: uppercase;
+    -webkit-text-fill-color: #fff; /* Reset transparent fill override */
+}
+
+.big-play-btn.coming-soon {
+    background: #2a2a2a !important; /* Force override gradient */
+    border: 1px solid #444 !important;
+    color: #666 !important;
+    cursor: not-allowed !important;
+    box-shadow: none !important;
+    transform: none !important; 
+    pointer-events: none; /* Block clicks */
+}
+.big-play-btn.coming-soon:hover {
+    filter: none;
 }
 

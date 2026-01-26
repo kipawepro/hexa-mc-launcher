@@ -379,7 +379,42 @@ const launchBtn = document.getElementById('launch-btn');
 const loadingOverlay = document.getElementById('loading-overlay');
 const loadingLog = document.getElementById('loading-log');
 
+// =========================================
+// VERSION SELECTOR LOGIC
+// =========================================
+const verBase = document.getElementById('ver-base');
+const verEnhanced = document.getElementById('ver-enhanced');
+const modpackNameStatus = document.getElementById('modpack-name');
+
+if (verBase && verEnhanced) {
+    const setVersion = (version) => {
+        if (version === 'base') {
+            verBase.classList.add('active');
+            verEnhanced.classList.remove('active');
+            
+            // Restore Play Button
+            launchBtn.classList.remove('coming-soon');
+            launchBtn.innerHTML = 'JOUER';
+            if (modpackNameStatus) modpackNameStatus.innerText = 'Prêt à jouer';
+        } else if (version === 'enhanced') {
+            verEnhanced.classList.add('active');
+            verBase.classList.remove('active');
+            
+            // Set Coming Soon state
+            launchBtn.classList.add('coming-soon');
+            launchBtn.innerHTML = 'BIENTÔT DISPONIBLE';
+            if (modpackNameStatus) modpackNameStatus.innerText = 'HG Studio Enhanced';
+        }
+    };
+
+    verBase.addEventListener('click', () => setVersion('base'));
+    verEnhanced.addEventListener('click', () => setVersion('enhanced'));
+}
+
 launchBtn.addEventListener('click', async () => {
+    // Prevent launch if Coming Soon (Double check in case CSS fails)
+    if (launchBtn.classList.contains('coming-soon')) return;
+
     // Show Loading Overlay
     loadingOverlay.style.display = 'flex';
     loadingLog.innerText = "INITIALISATION...";
