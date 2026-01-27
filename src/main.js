@@ -1460,6 +1460,87 @@ async function removeZeroByteFiles(dir) {
     }
 }
 
+
+// ==========================================
+// MANAGER HANDLERS (Schematics, RP, Shaders)
+// ==========================================
+function getInstanceRoot() {
+    return path.join(app.getPath('appData'), '.hg_oo', 'instances', 'hg_studio_official'); 
+}
+
+function getFolderByType(type) {
+    const root = getInstanceRoot();
+    if (type === 'schematics') return path.join(root, 'schematics');
+    if (type === 'resourcepacks') return path.join(root, 'resourcepacks');
+    if (type === 'shaderpacks') return path.join(root, 'shaderpacks');
+    return null;
+}
+
+ipcMain.handle('get-instance-files', async (event, type) => {
+    const targetDir = getFolderByType(type);
+    if (!targetDir) return [];
+
+    try {
+        await fs.mkdir(targetDir, { recursive: true });
+        const files = await fs.readdir(targetDir);
+        const fileStats = [];
+
+        for (const file of files) {
+            try {
+                const stat = await fs.stat(path.join(targetDir, file));
+                if (stat.isFile()) {
+                    fileStats.push({
+                        name: file,
+                        size: stat.size,
+                        date: stat.mtime
+                    });
+                }
+            } catch (e) {}
+        }
+        return fileStats;
+    } catch (e) {
+        console.error(`Error reading ${type}:`, e);
+        return [];
+    }
+});
+
+ipcMain.handle('add-instance-file', async (event, { type, sourcePath }) => {
+    const targetDir = getFolderByType(type);
+    if (!targetDir) return { success: false, message: "Invalid type" };
+
+    try {
+        await fs.mkdir(targetDir, { recursive: true });
+        const fileName = path.basename(sourcePath);
+        const destPath = path.join(targetDir, fileName);
+        
+        await fs.copyFile(sourcePath, destPath);
+        return { success: true };
+    } catch (e) {
+        console.error(`Error adding file to ${type}:`, e);
+        return { success: false, message: e.message };
+    }
+});
+
+ipcMain.handle('delete-instance-file', async (event, { type, fileName }) => {
+    const targetDir = getFolderByType(type);
+    if (!targetDir) return { success: false, message: "Invalid type" };
+
+    try {
+        await fs.unlink(path.join(targetDir, fileName));
+        return { success: true };
+    } catch (e) {
+        return { success: false, message: e.message };
+    }
+});
+
+ipcMain.handle('open-instance-folder', async (event, type) => {
+    const targetDir = getFolderByType(type);
+    if (targetDir) {
+        await fs.mkdir(targetDir, { recursive: true });
+        require('electron').shell.openPath(targetDir);
+    }
+});
+
 async function enforceAntiCheat(installPath, mainWindow) {
     console.log("[Anti-Cheat] Starting verification...");
     if (mainWindow) mainWindow.webContents.send('log', "Anti-Cheat: Vérification des fichiers...");

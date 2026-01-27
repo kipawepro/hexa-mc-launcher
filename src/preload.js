@@ -23,5 +23,11 @@ contextBridge.exposeInMainWorld('api', {
     restoreSession: (user) => ipcRenderer.invoke('restore-session', user),
     getAppVersion: () => ipcRenderer.invoke('get-app-version'),
     getThemes: () => ipcRenderer.invoke('get-themes'),
-    updateRpc: (activity) => ipcRenderer.send('update-rpc', activity)
+    updateRpc: (activity) => ipcRenderer.send('update-rpc', activity),
+    
+    // File Managers
+    getInstanceFiles: (type) => ipcRenderer.invoke('get-instance-files', type),
+    addInstanceFile: (data) => ipcRenderer.invoke('add-instance-file', data),
+    deleteInstanceFile: (data) => ipcRenderer.invoke('delete-instance-file', data),
+    openInstanceFolder: (type) => ipcRenderer.invoke('open-instance-folder', type)
 });

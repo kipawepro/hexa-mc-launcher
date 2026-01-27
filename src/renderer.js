@@ -1132,3 +1132,118 @@ if (mapBtn && mapScreen && closeMapBtn) {
         if(mapIframe) mapIframe.src = 'about:blank';
     });
 }
+
+// =========================================
+// GAME FILES MANAGER (Schematic, RP, Shaders)
+// =========================================
+
+const managerTypes = ['schematics', 'resourcepacks', 'shaderpacks'];
+
+async function refreshManagerList(type) {
+    const listContainer = document.getElementById(`list-${type}`);
+    if (!listContainer) return;
+
+    listContainer.innerHTML = '<div style="text-align:center; color:#666; font-size:12px;">Chargement...</div>';
+
+    try {
+        const files = await window.api.getInstanceFiles(type);
+        listContainer.innerHTML = ''; // Clear
+
+        if (files.length === 0) {
+            listContainer.innerHTML = '<div style="text-align:center; color:#666; font-size:12px; margin-top:5px;">Aucun fichier</div>';
+            return;
+        }
+
+        files.forEach(file => {
+            const item = document.createElement('div');
+            item.className = 'file-item';
+            
+            const sizeStr = (file.size / 1024 / 1024).toFixed(2) + ' MB';
+            
+            item.innerHTML = `
+                <span title="${file.name}">${file.name} <small style="color:#666;">(${sizeStr})</small></span>
+                <div class="file-actions">
+                    <button class="btn-del" title="Supprimer"><i class="fas fa-trash"></i></button>
+                </div>
+            `;
+
+            // Delete Action
+            item.querySelector('.btn-del').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if(confirm(`Supprimer ${file.name} ?`)) {
+                    await window.api.deleteInstanceFile({ type, fileName: file.name });
+                    refreshManagerList(type);
+                }
+            });
+
+            listContainer.appendChild(item);
+        });
+    } catch (e) {
+        console.error("Manager error:", e);
+        listContainer.innerHTML = `<div style="color:#d55;">Erreur</div>`;
+    }
+}
+
+function preventDefaults (e) { e.preventDefault(); e.stopPropagation(); }
+
+// Setup Event Listeners for Managers
+managerTypes.forEach(type => {
+    // 1. Refresh on Tab Open (or just init)
+    // refreshManagerList(type); // Call later on settings open
+
+    // 2. Open Folder Button
+    const openBtn = document.querySelector(`.open-folder-btn[data-type="${type}"]`);
+    if(openBtn) {
+        openBtn.addEventListener('click', () => {
+            window.api.openInstanceFolder(type);
+        });
+    }
+
+    // 3. Drop Zone
+    const dropZone = document.getElementById(`drop-${type}`);
+    if(dropZone) {
+        // Prevent default drag behaviors
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        // Highlight logic
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
+        });
+
+        // Handle Drop
+        dropZone.addEventListener('drop', async (e) => {
+            const files = e.dataTransfer.files;
+            if(files.length > 0) {
+                // Show loading state temporarily?
+                for (let i = 0; i < files.length; i++) {
+                   await window.api.addInstanceFile({ type, sourcePath: files[i].path });
+                }
+                refreshManagerList(type);
+            }
+        });
+    }
+
+    // 4. Browse Button inside Drop Zone
+    const browseBtn = document.querySelector(`.browse-trigger[data-type="${type}"]`);
+    if(browseBtn) {
+        browseBtn.addEventListener('click', async () => {
+            const path = await window.api.openFileDialog(); // We assume single file for now or reuse existing
+            if(path) {
+                await window.api.addInstanceFile({ type, sourcePath: path });
+                refreshManagerList(type);
+            }
+        });
+    }
+});
+
+// Reload lists when Settings are opened
+settingsBtn.addEventListener('click', () => {
+    managerTypes.forEach(t => refreshManagerList(t));
+});
+
