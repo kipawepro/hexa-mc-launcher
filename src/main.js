@@ -640,9 +640,18 @@ ipcMain.handle('launch-game', async (event, options) => {
                 if (data.config.gameVersion) {
                     gameVersion = data.config.gameVersion;
                 }
-                if (data.config.activeModpack) {
+                
+                // --- MODIFIED: Theme dependent modpack ---
+                if (options && options.activeModpack) {
+                    // If renderer sent a specific modpack (based on theme), use it!
+                    console.log("Using Theme Specific Modpack overridden by Renderer");
+                    activeModpack = options.activeModpack;
+                } else if (data.config.activeModpack) {
+                    // Fallback to default
                     activeModpack = data.config.activeModpack;
                 }
+                // -----------------------------------------
+
                 if (data.config.maintenance) {
                      return { success: false, message: "Le serveur est en maintenance." };
                 }

@@ -558,7 +558,38 @@ launchBtn.addEventListener('click', async () => {
             largeImageText: 'HG Studio'
         });
 
-        const result = await window.api.launchGame();
+        const settings = await window.api.getSettings();
+        
+        // --- NEW MODPACK SELECTION LOGIC ---
+        // 1. Get global config
+        const config = await window.api.getLauncherConfig();
+        
+        // 2. Determine target modpack based on Theme
+        let targetModpack = config.activeModpack; // Default
+        
+        const currentThemeId = settings.activeTheme || 'Autum'; // Default Autum
+        
+        // Map themes to config keys (Assuming backend provides modpack_autumn, modpack_cherry, modpack_dragon)
+        // Adjust these keys to match exactly what your backend sends in the JSON "config" object
+        if (currentThemeId === 'Cherry' && config.modpack_cherry) {
+            targetModpack = config.modpack_cherry;
+            console.log("Using Cherry Modpack");
+        } else if (currentThemeId === 'Dragon' && config.modpack_dragon) {
+            targetModpack = config.modpack_dragon;
+            console.log("Using Dragon Modpack");
+        } else if (currentThemeId === 'Autum' && config.modpack_autumn) {
+            targetModpack = config.modpack_autumn;
+            console.log("Using Autumn Modpack");
+        } else {
+             console.log("Using Default Active Modpack");
+        }
+
+        // 3. Launch with selected modpack (Pass it to main process via options)
+        const result = await window.api.launchGame({
+            ...settings,
+            activeModpack: targetModpack 
+        });
+
         console.log(result);
     } catch (error) {
         console.error(error);
