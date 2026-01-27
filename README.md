@@ -20,10 +20,9 @@
 
 ## 📸 Aperçu
 
-<!-- AJOUTEZ VOS SCREENSHOTS ICI -->
 <p align="center">
-  <img src="URL_DE_VOTRE_SCREENSHOT_ACCUEIL_ICI" alt="Page d'accueil" width="45%">
-  <img src="URL_DE_VOTRE_SCREENSHOT_SETTINGS_ICI" alt="Paramètres & Gestionnaire" width="45%">
+  <img src="https://i.imgur.com/vnOdbzB.png" alt="Page d'accueil" width="45%">
+  <img src="https://i.imgur.com/3WOthuI.png" alt="Paramètres & Gestionnaire" width="45%">
 </p>
 
 ## ✨ Fonctionnalités
