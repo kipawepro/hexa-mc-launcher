@@ -1,6 +1,6 @@
 {
   "name": "hg-launcher",
-  "version": "2.0.7",
+  "version": "3.0.0",
   "description": "hg.studio launcher",
   "main": "src/main.js",
   "scripts": {

@@ -5,29 +5,22 @@
 
 /* --- Background Video --- */
 .video-background {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    min-width: 100%;
-    min-height: 100%;
-    width: auto;
-    height: auto;
-    z-index: 0;
-    transform: translate(-50%, -50%);
-    pointer-events: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     overflow: hidden;
+    z-index: 0;
 }
 
 .video-background video {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    min-width: 100%;
-    min-height: 100%;
-    width: auto;
-    height: auto;
-    object-fit: cover;
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Cover is standard to fill screen. "Zoomed" usually means it's cropped. */
+    /* If user wants to see MORE of the video (less zoom), they might prefer 'contain' but that leaves black bars. */
+    /* Or maybe the previous CSS was using specific min-width/transform causing extra zoom. */
+    /* The replace below removes the 'translate(-50%, -50%)' and min-width hacks causing the zoom effect. */
 }
 
 .video-overlay {
@@ -528,9 +521,9 @@
     box-shadow: 
         inset 0 2px 0 rgba(255,255,255,0.3),
         inset 0 -4px 0 rgba(0,0,0,0.2),
-        0 4px 0 #a30036, /* Darker pink for 3D depth */
+        0 4px 0 rgba(0,0,0,0.5), /* Neutral shadow */
         0 10px 20px rgba(0,0,0,0.5);
-    transition: all 0.1s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* Smoother transition */
     /* Minecraft-ish shape */
     clip-path: polygon(
         4px 0, calc(100% - 4px) 0, 
@@ -538,16 +531,19 @@
         calc(100% - 4px) 100%, 4px 100%, 
         0 calc(100% - 4px), 0 4px
     );
+    position: relative;
+    overflow: hidden;
 }
 
 .big-play-btn:hover {
-    background-color: #ff3377; /* Lighter Pink */
+    filter: brightness(1.2); /* Use filter to brighten whatever the variable color is */
+    /* background-color: #ff3377; REMOVED HARDCODED */
     transform: translateY(-2px);
     box-shadow: 
         inset 0 2px 0 rgba(255,255,255,0.3),
         inset 0 -4px 0 rgba(0,0,0,0.2),
-        0 6px 0 #a30036,
-        0 15px 30px rgba(255, 0, 85, 0.4);
+        0 6px 0 rgba(0,0,0,0.5),
+        0 15px 30px rgba(0,0,0, 0.4); /* Neutral shadow glow */
 }
 
 .big-play-btn:active {
@@ -555,7 +551,7 @@
     box-shadow: 
         inset 0 2px 0 rgba(255,255,255,0.3),
         inset 0 -2px 0 rgba(0,0,0,0.2),
-        0 0 0 #a30036,
+        0 0 0 rgba(0,0,0,0.8),
         0 2px 10px rgba(0,0,0,0.5);
 }
 
@@ -583,6 +579,7 @@
 .settings-icon-btn:hover {
     color: #fff;
     transform: rotate(90deg);
+    background: transparent !important; /* Prevent global hover pink */
 }
 
 /* Profile Dropdown Override */
@@ -692,9 +689,9 @@
 }
 
 .login-btn-new:hover {
-    background: #ff3377;
+    filter: brightness(1.2); /* Dynamic brightening */
     transform: translateY(-1px);
-    box-shadow: 0 5px 15px rgba(255, 0, 85, 0.3);
+    box-shadow: 0 5px 15px rgba(0,0,0, 0.3); /* Generic shadow */
 }
 
 .divider-new {
@@ -1121,7 +1118,7 @@ input[type=range]::-webkit-slider-thumb {
     /* margin-top needs to calculate against track height. Track is 4px. Thumb is 20px. 
        Margin = (4 - 20) / 2 = -8px */
     margin-top: -8px; 
-    box-shadow: 0 0 10px rgba(255, 0, 85, 0.5);
+    box-shadow: 0 0 10px var(--primary-pink-dim);
     border: 2px solid #fff;
     position: relative;
     z-index: 2;
@@ -1130,8 +1127,7 @@ input[type=range]::-webkit-slider-runnable-track {
     width: 100%;
     height: 4px;
     cursor: pointer;
-    /* Base track color (the grey part). JS adds the gradient image on top of this or replaces it */
-    background: #444; 
+    background: transparent; /* Remove conflict with JS gradient */
     border-radius: 2px;
 }
 
@@ -1174,10 +1170,13 @@ input[type=range]::-webkit-slider-runnable-track {
 }
 
 .preset-btn.active {
-    background: rgba(255, 0, 85, 0.2);
-    border-color: #ff0055;
-    color: #ff0055;
-    box-shadow: 0 0 10px rgba(255, 0, 85, 0.3);
+    background: rgba(var(--primary-rgb), 0.2); /* Use var for background too if possible, but hex opacity is tricky. Actually let's use the main var without opacity or different variable logic */
+    /* Better: Use CSS Color Module 4 if supported, or calc. For now: let's rely on standard var */
+    background: var(--primary-pink); 
+    border-color: var(--primary-pink);
+    color: #fff; /* White text on colored background is safer */
+    box-shadow: 0 0 10px var(--primary-pink);
+    opacity: 0.8;
 }
 
 /* Color Picker */
@@ -1450,27 +1449,28 @@ body.sharp-corners *::after {
 
 /* Enhanced specific active style */
 .version-option[data-version="enhanced"].active {
-    background: linear-gradient(135deg, rgba(255, 50, 85, 0.2), rgba(255, 0, 50, 0.1));
-    border-color: rgba(255, 50, 85, 0.4);
-    box-shadow: 0 4px 15px rgba(255, 50, 85, 0.15);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--primary-pink);
+    box-shadow: 0 0 10px var(--primary-pink);
 }
 
 .version-option[data-version="enhanced"].active span:first-child {
-    background: linear-gradient(90deg, #ff7eb3, #ff758c);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    text-shadow: 0 2px 10px rgba(255, 50, 85, 0.3);
+    color: var(--primary-pink);
+    background: none;
+    -webkit-background-clip: padding-box;
+    -webkit-text-fill-color: var(--primary-pink);
+    text-shadow: 0 0 8px var(--primary-pink); 
 }
 
 .badge-new {
-    background: linear-gradient(90deg, #ff758c, #ff7eb3);
+    background: var(--primary-pink);
     color: #fff;
     font-size: 9px;
     padding: 2px 6px;
     border-radius: 4px;
     font-weight: 800;
     letter-spacing: 0.5px;
-    box-shadow: 0 2px 5px rgba(255, 117, 140, 0.4);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
     text-transform: uppercase;
     -webkit-text-fill-color: #fff; /* Reset transparent fill override */
 }
@@ -1486,5 +1486,591 @@ body.sharp-corners *::after {
 }
 .big-play-btn.coming-soon:hover {
     filter: none;
+}
+
+/* ========================
+   HELIOS-LIKE SETTINGS
+   ======================== */
+
+.settings-page {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4); /* TRANSPARENT AGAIN! */
+    backdrop-filter: blur(10px); /* Add blur so content is readable over video */
+    z-index: 8000;
+    display: flex; /* Flex is good for layout, but centering is removed below if needed, though for 100% children it's fine */
+    /* justify-content: center; REMOVED */
+    /* align-items: center; REMOVED */
+    color: #eee;
+}
+
+/* FIX: Disable the pseudo-element overlay from old style.css that was blocking clicks */
+.settings-page::before {
+    content: none !important;
+    display: none !important;
+}
+
+.settings-layout {
+    display: flex;
+    width: 100%; /* Full Width */
+    height: 100%; /* Full Height */
+    max-width: none; /* No constraints */
+    background: transparent;
+    position: relative; /* Ensure it stays above any background */
+    z-index: 10;
+}
+
+/* SIDEBAR */
+.settings-sidebar {
+    width: 250px;
+    display: flex;
+    flex-direction: column;
+    padding: 40px 20px;
+}
+
+.settings-header {
+    margin-bottom: 40px;
+}
+
+.settings-main-title {
+    font-size: 32px;
+    font-weight: 300;
+    margin: 0;
+}
+
+.settings-nav-menu {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.nav-item {
+    font-size: 18px;
+    font-weight: 400;
+    color: #888;
+    cursor: pointer;
+    transition: color 0.2s;
+    padding: 5px 0;
+}
+
+.nav-item:hover {
+    color: #bbb;
+}
+
+.nav-item.active {
+    color: #fff;
+    font-weight: 600;
+}
+
+.settings-sidebar-footer {
+    padding-top: 20px;
+}
+
+.done-btn {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    text-transform: capitalize;
+    padding: 0;
+}
+
+.done-btn:hover {
+    text-decoration: underline;
+    background: transparent !important; /* Prevent global hover pink */
+}
+
+/* CONTENT AREA */
+.settings-content {
+    flex: 1;
+    padding: 60px 60px 40px 60px; /* More top padding for window controls, and right padding */
+    overflow-y: auto;
+}
+
+/* Hide scrollbar for settings content but allow scroll */
+.settings-content::-webkit-scrollbar {
+    width: 8px;
+}
+.settings-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+.settings-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+.tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.tab-header {
+    margin-bottom: 40px;
+}
+
+.tab-header h2 {
+    font-size: 24px;
+    margin: 0 0 10px 0;
+    font-weight: 500;
+}
+
+.tab-header p {
+    color: #aaa;
+    margin: 0;
+    font-size: 14px;
+}
+
+/* SETTING ITEMS */
+.setting-item {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.setting-item:last-child {
+    border-bottom: none;
+}
+
+.setting-item label {
+    display: block;
+    font-size: 16px;
+    margin-bottom: 10px;
+    font-weight: 500;
+}
+
+.setting-desc {
+    color: #888;
+    font-size: 13px;
+    margin-top: 8px;
+    margin-bottom: 0;
+}
+
+/* Account List */
+.account-section {
+    margin-top: 20px;
+}
+
+.account-type-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+
+.account-icon-ms {
+    font-size: 18px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.account-icon-ms i { color: #00a4ef; }
+
+.add-account-btn {
+    background: transparent;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.account-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 15px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.account-card.selected {
+    border-color: #4CAF50;
+    background: rgba(76, 175, 80, 0.1);
+}
+.account-card.selected:after {
+    content: "Selected Account ✓";
+    color: #fff;
+    font-size: 12px;
+    margin-left: auto;
+}
+
+.acc-avatar {
+    width: 40px;
+    height: 40px;
+    background: #444;
+    border-radius: 4px;
+    background-size: cover;
+}
+
+.acc-details {
+    flex: 1;
+}
+
+.acc-name {
+    display: block;
+    font-weight: 600;
+}
+
+.acc-uuid {
+    display: block;
+    font-size: 11px;
+    color: #aaa;
+    font-family: monospace;
+}
+
+/* Resolution Inputs */
+.resolution-inputs {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.res-input {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    padding: 8px;
+    border-radius: 4px;
+    width: 80px;
+    text-align: center;
+}
+
+.res-x {
+    color: #888;
+}
+
+/* Toggle Switch Row */
+.toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 40px;
+}
+.toggle-row .setting-text {
+    flex: 1;
+    padding-right: 20px;
+}
+.toggle-row .switch {
+    flex-shrink: 0;
+}
+.toggle-row label {
+    margin-bottom: 0;
+    display: inline-block;
+}
+
+/* Switch Styling (Greener) */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 26px; /* Slightly taller for better touch target */
+}
+
+.switch input { 
+    opacity: 0; 
+    width: 0; 
+    height: 0; 
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #444; /* Dark grey when off */
+    transition: .3s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.slider.round { 
+    border-radius: 34px; 
+}
+
+.slider.round:before { 
+    border-radius: 50%; 
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px; /* Bigger dot */
+    width: 18px;
+    left: 4px;
+    bottom: 4px; /* (26 - 18) / 2 = 4px -> Centered */
+    background-color: white;
+    transition: .3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+input:checked + .slider {
+    background-color: #4CAF50; /* Green when on */
+}
+
+input:focus + .slider {
+    box-shadow: 0 0 1px #4CAF50;
+}
+
+input:checked + .slider:before {
+    transform: translateX(24px); /* 50 - 4 - 4 - 18 = 24px */
+}
+input:checked + .slider {
+    background-color: #4CAF50;
+}
+input:checked + .slider:before {
+    transform: translateX(26px);
+}
+
+/* RAM Slider */
+.ram-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+.ram-display {
+    font-size: 20px;
+    font-weight: 300;
+}
+.ram-slider-container {
+    padding: 10px 0;
+}
+.styled-slider {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    background: #444;
+    border-radius: 3px;
+    outline: none;
+}
+.styled-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    background: #fff;
+    border-radius: 2px;
+    cursor: pointer;
+}
+.ram-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #888;
+    margin-top: 5px;
+}
+
+/* File Input */
+.file-input-group {
+    display: flex;
+    gap: 0;
+    max-width: 500px;
+}
+.file-path-display {
+    flex: 1;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-right: none;
+    border-radius: 4px 0 0 4px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.file-path-display i { color: #fff; }
+.file-path-display input {
+    background: transparent;
+    border: none;
+    color: #ccc;
+    width: 100%;
+    outline: none;
+}
+.file-browse-btn {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    padding: 0 15px;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+}
+.file-browse-btn:hover { background: rgba(255,255,255,0.2); }
+
+/* Text Input Styled */
+.input-container {
+    display: flex;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    overflow: hidden;
+    max-width: 500px;
+}
+.input-icon {
+    padding: 10px;
+    background: rgba(255,255,255,0.05);
+    color: #aaa;
+}
+.text-input-styled {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #fff;
+    padding: 10px;
+    outline: none;
+}
+
+/* ========================
+   INTRO SCREEN
+   ======================== */
+#intro-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    z-index: 10000; /* Top most */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: opacity 0.5s ease-out;
+}
+
+.intro-logo {
+    width: 120px;
+    height: auto;
+    animation: introPulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes introPulse {
+    from { transform: scale(1); opacity: 0.8; }
+    to { transform: scale(1.1); opacity: 1; }
+}
+
+/* ========================
+   LOVE POPUP & FOOTER (CHERRY STYLE)
+   ======================== */
+#love-popup {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(10px);
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.love-content {
+    background: linear-gradient(135deg, #1c1c1c, #2a2a2a);
+    border: 2px solid #ff9ebb; /* Cherry Light Pink */
+    box-shadow: 0 0 30px rgba(255, 158, 187, 0.4);
+    padding: 40px;
+    border-radius: 20px;
+    text-align: center;
+    max-width: 400px;
+    animation: popIn 0.4s cubic-bezier(0.2,0.8,0.2,1);
+}
+
+.love-title {
+    color: #ff9ebb;
+    font-size: 24px;
+    margin-bottom: 15px;
+    font-family: 'Outfit', sans-serif;
+}
+.love-text {
+    color: #eee;
+    font-size: 16px;
+    margin-bottom: 30px;
+    line-height: 1.5;
+}
+
+.love-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    align-items: center;
+}
+
+.love-btn {
+    background: #ff9ebb;
+    color: #333;
+    border: none;
+    padding: 10px 30px;
+    border-radius: 50px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 14px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.love-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 5px 15px rgba(255, 158, 187, 0.4);
+}
+
+.love-switch {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: #888;
+    cursor: pointer;
+}
+.love-switch input { display: none; }
+.love-slider {
+    width: 30px; height: 16px; background: #444;
+    border-radius: 20px; position: relative;
+    transition: 0.3s;
+}
+.love-slider:before {
+    content: ''; position: absolute;
+    width: 12px; height: 12px;
+    background: #fff;
+    border-radius: 50%;
+    top: 2px; left: 2px;
+    transition: 0.3s;
+}
+.love-switch input:checked + .love-slider { background: #ff9ebb; }
+.love-switch input:checked + .love-slider:before { transform: translateX(14px); }
+
+#love-footer {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    color: #ff9ebb;
+    font-size: 12px;
+    font-weight: 600;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+    pointer-events: none;
+    z-index: 5000;
+    opacity: 0.8;
+}
+
+.special-leane {
+    color: #ff9ebb !important;
+    animation: heartbeat 2s infinite;
+}
+.special-leane:hover {
+    background: rgba(255, 158, 187, 0.1) !important;
+}
+
+@keyframes heartbeat {
+    0% { transform: scale(1); }
+    5% { transform: scale(1.1); }
+    10% { transform: scale(1); }
+    15% { transform: scale(1.1); }
+    50% { transform: scale(1); }
+    100% { transform: scale(1); }
+}
+
+@keyframes popIn {
+    from { transform: scale(0.8); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
 }
 

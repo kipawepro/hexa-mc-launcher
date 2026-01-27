@@ -168,19 +168,23 @@ function handleDeepLink(url) {
 }
 
 async function loadConfig() {
+    const defaults = {
+        minRam: '2G',
+        maxRam: '4G',
+        javaPath: '',
+        jvmArgs: '',
+        resolution: { width: 854, height: 480 },
+        fullscreen: false,
+        closeLauncher: true,
+        activeTheme: 'Autum' 
+    };
+
     try {
         const data = await fs.readFile(configPath, 'utf-8');
-        return JSON.parse(data);
+        const loaded = JSON.parse(data);
+        return { ...defaults, ...loaded };
     } catch (error) {
-        return {
-            minRam: '2G',
-            maxRam: '4G',
-            javaPath: '',
-            jvmArgs: '',
-            resolution: { width: 854, height: 480 },
-            fullscreen: false,
-            closeLauncher: true
-        };
+        return defaults;
     }
 }
 
@@ -1363,6 +1367,54 @@ ipcMain.handle('get-app-version', () => {
     return app.getVersion();
 });
 
+ipcMain.handle('get-themes', async () => {
+    // Determine path based on environment (dev vs prod)
+    // In dev: src/assets/themes
+    // In prod: resources/app/src/assets/themes OR resources/assets/themes depending on build
+    // safely assuming __dirname points to src/ inside electron wrapper
+    const themesDir = path.join(__dirname, 'assets', 'themes');
+    const themes = [];
+    try {
+        const items = await fs.readdir(themesDir, { withFileTypes: true });
+        for (const item of items) {
+            if (item.isDirectory()) {
+                try {
+                    const themePath = path.join(themesDir, item.name);
+                    const configPath = path.join(themePath, 'theme.json');
+                    
+                    // Check if config exists
+                    await fs.access(configPath);
+                    
+                    const configData = await fs.readFile(configPath, 'utf8');
+                    const config = JSON.parse(configData);
+                    
+                    // Verify video existence
+                    const videoPath = path.join(themePath, 'background.mp4');
+                    let hasVideo = false;
+                    try {
+                        await fs.access(videoPath);
+                        hasVideo = true;
+                    } catch(e) {}
+
+                    if (hasVideo) {
+                        themes.push({
+                            id: item.name,
+                            folder: item.name, // Folder name for relative path construction
+                            title: config.title || item.name,
+                            accentColor: config.accentColor || '#ff0055' 
+                        });
+                    }
+                } catch (e) {
+                    console.warn(`Skipping invalid theme folder ${item.name}:`, e.message);
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Error loading themes:", e);
+    }
+    return themes;
+});
+
 ipcMain.handle('open-file-dialog', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
         properties: ['openFile'],
@@ -1499,6 +1551,7 @@ async function installMrPack(url, installPath, mainWindow) {
             'resourcepacks', 
             'shaderpacks',
             'schematics',
+            'config',
         ];
 
         try {

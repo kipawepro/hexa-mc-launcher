@@ -17,10 +17,131 @@ if (navHomeBtn) {
 
 // Check Maintenance on Startup
 (async () => {
+
+    // INTRO SCREEN LOGIC
+    setTimeout(() => {
+        const intro = document.getElementById('intro-screen');
+        if (intro) {
+            intro.style.opacity = '0';
+            setTimeout(() => { 
+                intro.remove(); 
+            }, 500); // Wait for fade out transition (0.5s)
+        }
+    }, 1000); // Show for 1 second
+
+    // STARTUP: Apply Theme if Saved
+    try {
+        const savedSettings = await window.api.getSettings();
+        if (savedSettings.activeTheme) {
+            // We need to resolve the path. 
+            // We know the ID, but we need the folder name.
+            // Assumption: ID is usually the folder name.
+            // If strictly needed, we should fetch themes list here too, or store full path.
+            // Storing just ID is cleaner. Let's fetch themes to be safe/correct.
+            const themes = await window.api.getThemes();
+            const currentTheme = themes.find(t => t.id === savedSettings.activeTheme);
+            
+            if (currentTheme) {
+                // Apply Color
+                document.documentElement.style.setProperty('--primary-pink', currentTheme.accentColor);
+                
+                // Apply Video
+                const bgVideo = document.getElementById('bg-video');
+                if (bgVideo) {
+                    bgVideo.src = `assets/themes/${currentTheme.folder}/background.mp4`;
+                    bgVideo.play().catch(e => {}); // Autoplay might be blocked until interaction, but usually fine in Electron
+                }
+            } else {
+                 // Fallback if theme not found? Keep default.
+            }
+        } else if (savedSettings.accentColor) {
+             // Legacy fallback
+             document.documentElement.style.setProperty('--primary-pink', savedSettings.accentColor);
+        }
+    } catch(e) {
+        console.warn("Theme startup error:", e);
+    }
+
     // Set Version
     const appVersion = await window.api.getAppVersion();
     const versionEl = document.getElementById('current-version');
     if (versionEl) versionEl.innerText = appVersion;
+
+    // ============================================
+    // LEANE SPECIAL FEATURE
+    // ============================================
+    const TARGET_UUID = "f47859908c724114821e98beaec87a2b";
+    let activeUserUUID = null;
+
+    // Check saved sessions
+    try {
+         const hgUser = JSON.parse(localStorage.getItem('hg_user_data'));
+         if (hgUser && hgUser.uuid) activeUserUUID = hgUser.uuid;
+         else {
+             const msUser = JSON.parse(localStorage.getItem('user_session'));
+             if (msUser && msUser.uuid) activeUserUUID = msUser.uuid;
+         }
+    } catch(e) {}
+
+    // Clean UUID formatting (remove dashes if needed)
+    if (activeUserUUID) activeUserUUID = activeUserUUID.replace(/-/g, '').toLowerCase();
+
+    if (activeUserUUID === TARGET_UUID) {
+        console.log("Welcome Leane <3");
+
+        // 1. Show Special Elements
+        const footer = document.getElementById('love-footer');
+        if(footer) footer.style.display = 'block';
+
+        const loveBtn = document.getElementById('btn-leane');
+        if(loveBtn) {
+            loveBtn.style.display = 'flex';
+            loveBtn.onclick = () => window.api.openExternal('http://91.197.6.177:24607/leane/');
+        }
+
+        const loveSetting = document.getElementById('setting-leane-container');
+        if(loveSetting) loveSetting.style.display = 'flex';
+
+        // 2. Logic for Popup
+        const settings = await window.api.getSettings();
+        const popup = document.getElementById('love-popup');
+        
+        // If setting "hideLovePopup" is NOT true in config OR if user forced it ON in UI settings just now (handled by update loop but initially here)
+        // Actually, we store "hideLovePopup" as boolean.
+        
+        if (!settings.hideLovePopup && popup) {
+            popup.style.display = 'flex';
+
+            const closeBtn = document.getElementById('love-close-btn');
+            const checkbox = document.getElementById('love-popup-checkbox');
+            
+            closeBtn.onclick = async () => {
+                popup.style.display = 'none';
+                if (checkbox.checked) {
+                    await window.api.saveSettings({ ...settings, hideLovePopup: true });
+                    // Also update the UI toggle in settings if it exists
+                    const settToggle = document.getElementById('s-love-popup');
+                    if(settToggle) settToggle.checked = false; // "Show" is checked, so Hide is unchecked. Wait, logic inverse.
+                    // Let's align settings toggle: "Afficher le message"
+                    // If checkbox "Ne plus afficher" is checked -> hideLovePopup = true -> Afficher = false.
+                }
+            };
+        }
+
+        // 3. Settings Toggle Logic
+        const settToggle = document.getElementById('s-love-popup'); // This is "Afficher le message"
+        if(settToggle) {
+            settToggle.checked = !settings.hideLovePopup; // If hide is true, show is false.
+            
+            settToggle.addEventListener('change', async (e) => {
+                const show = e.target.checked;
+                // If show is true, hideLovePopup is false.
+                const newSettings = await window.api.getSettings();
+                await window.api.saveSettings({ ...newSettings, hideLovePopup: !show });
+            });
+        }
+    }
+
 
         // --- FORCED UPDATE POPUP CHECK (MOVED TO TOP) ---
         try {
@@ -388,23 +509,31 @@ const modpackNameStatus = document.getElementById('modpack-name');
 
 if (verBase && verEnhanced) {
     const setVersion = (version) => {
-        if (version === 'base') {
-            verBase.classList.add('active');
-            verEnhanced.classList.remove('active');
+        // Simple opacity fade for text transition
+        launchBtn.style.color = 'transparent';
+        
+        setTimeout(() => {
+            if (version === 'base') {
+                verBase.classList.add('active');
+                verEnhanced.classList.remove('active');
+                
+                // Restore Play Button
+                launchBtn.classList.remove('coming-soon');
+                launchBtn.innerHTML = 'JOUER';
+                if (modpackNameStatus) modpackNameStatus.innerText = 'Prêt à jouer';
+            } else if (version === 'enhanced') {
+                verEnhanced.classList.add('active');
+                verBase.classList.remove('active');
+                
+                // Set Coming Soon state
+                launchBtn.classList.add('coming-soon');
+                launchBtn.innerHTML = 'BIENTÔT DISPONIBLE';
+                if (modpackNameStatus) modpackNameStatus.innerText = 'HG Studio Enhanced';
+            }
             
-            // Restore Play Button
-            launchBtn.classList.remove('coming-soon');
-            launchBtn.innerHTML = 'JOUER';
-            if (modpackNameStatus) modpackNameStatus.innerText = 'Prêt à jouer';
-        } else if (version === 'enhanced') {
-            verEnhanced.classList.add('active');
-            verBase.classList.remove('active');
-            
-            // Set Coming Soon state
-            launchBtn.classList.add('coming-soon');
-            launchBtn.innerHTML = 'BIENTÔT DISPONIBLE';
-            if (modpackNameStatus) modpackNameStatus.innerText = 'HG Studio Enhanced';
-        }
+            // Restore visibility after change
+            launchBtn.style.color = '';
+        }, 200); // Wait for fade out
     };
 
     verBase.addEventListener('click', () => setVersion('base'));
@@ -490,278 +619,345 @@ const debugConsoleToggle = document.getElementById('debug-console-toggle');
 const tabButtons = document.querySelectorAll('.settings-nav li');
 const tabContents = document.querySelectorAll('.settings-tab');
 
-// Tab Switching Logic
-tabButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-        // Remove active class from all
-        tabButtons.forEach(b => b.classList.remove('active'));
-        tabContents.forEach(c => c.classList.remove('active'));
+// =========================================
+// HELIOS-STYLE SETTINGS LOGIC
+// =========================================
 
-        // Add active class to clicked
-        btn.classList.add('active');
-        const tabId = btn.getAttribute('data-tab');
-        document.getElementById(tabId).classList.add('active');
+// Elements
+const settingsNav = document.querySelectorAll('.nav-item');
+const settingsTabs = document.querySelectorAll('.tab-content');
+const doneBtn = document.getElementById('close-settings-btn'); // Renamed to "Done" in HTML but ID kept for compat
+
+// Inputs
+const s_gameWidth = document.getElementById('game-width');
+const s_gameHeight = document.getElementById('game-height');
+const s_fullscreen = document.getElementById('s-fullscreen');
+const s_autoconnect = document.getElementById('s-autoconnect');
+const s_detached = document.getElementById('s-detached');
+
+const s_ramSlider = document.getElementById('java-ram-slider');
+const s_ramDisplay = document.getElementById('ram-display-val');
+const s_sysFree = document.getElementById('sys-ram-free');
+const s_sysTotal = document.getElementById('sys-ram-total');
+const s_javaPath = document.getElementById('java-path-input');
+const s_javaArgs = document.getElementById('java-args-input');
+const s_browseJava = document.getElementById('browse-java-btn');
+
+const s_prerelease = document.getElementById('s-prerelease');
+const s_dataDir = document.getElementById('data-dir-input');
+const s_openDataDir = document.getElementById('open-data-dir-btn');
+
+// Tab Switching
+settingsNav.forEach(nav => {
+    nav.addEventListener('click', () => {
+        // Deactivate all
+        settingsNav.forEach(n => n.classList.remove('active'));
+        settingsTabs.forEach(t => t.classList.remove('active'));
+
+        // Activate clicked
+        nav.classList.add('active');
+        const tabId = nav.getAttribute('data-tab');
+        const content = document.getElementById(`tab-${tabId}`);
+        if(content) content.classList.add('active');
     });
+});
+
+// RAM Slider Visuals
+s_ramSlider.addEventListener('input', () => {
+    const mb = parseInt(s_ramSlider.value);
+    // Display in MB
+    s_ramDisplay.innerText = mb;
+    
+    // Update gradient
+    const min = parseInt(s_ramSlider.min);
+    const max = parseInt(s_ramSlider.max);
+    const percentage = ((mb - min) / (max - min)) * 100;
+    
+    // Look up the computed style for primary pink, or fallback
+    // We can use var() directly in linear-gradient for modern browsers
+    s_ramSlider.style.background = `linear-gradient(to right, var(--primary-pink) 0%, var(--primary-pink) ${percentage}%, #444 ${percentage}%, #444 100%)`;
 });
 
 // Open Settings
 settingsBtn.addEventListener('click', async () => {
+    // Add active class to body for hiding header elements
+    document.body.classList.add('settings-active');
+
     const settings = await window.api.getSettings();
     const sysInfo = await window.api.getSystemInfo();
+    const appVersion = await window.api.getAppVersion();
 
-    // System RAM
+    // Update Version Display
+    const verDisplay = document.getElementById('app-version-display');
+    if (verDisplay) verDisplay.innerText = `v${appVersion}`;
+
+    // System RAM Info
     const totalMemMB = Math.floor(sysInfo.totalMem / 1024 / 1024);
-    sysRamTotal.innerText = totalMemMB;
-    ramSlider.max = totalMemMB;
-
-    // Populate fields
-    // Handle legacy "4G" format vs new "4096" MB format
-    let ramMB = 4096;
-    if (settings.maxRam) {
-        let ramMB = parseInt(settings.maxRam);
-        
-        // Validation: If saved RAM > system total, cap it
-        if (ramMB > sysInfo.totalMem / 1024 / 1024) {
-            ramMB = Math.floor(sysInfo.totalMem / 1024 / 1024);
-        }
-        
-        // If slider max is less than total system (e.g. 16GB limit slider on 32GB system),
-        // we should probably increase slider max or just set value.
-        // For now, let's just set the value.
-        ramSlider.value = ramMB;
-    } else {
-         ramSlider.value = 4096;
-    }
+    const freeMemMB = Math.floor(sysInfo.freeMem / 1024 / 1024);
     
-    // Trigger visual update initially
-    const event = new Event('input');
-    ramSlider.dispatchEvent(event);
-
-    // Java Paths
-    javaPath17.value = settings.javaPath17 || settings.javaPath || '';
-    javaPath8.value = settings.javaPath8 || '';
-    javaPath21.value = settings.javaPath21 || '';
-
-    jvmArgsInput.value = settings.jvmArgs || '';
-
+    if(s_sysTotal) s_sysTotal.innerText = (totalMemMB / 1024).toFixed(1);
+    if(s_sysFree) s_sysFree.innerText = (freeMemMB / 1024).toFixed(1);
+    
+    s_ramSlider.max = totalMemMB;
+    
+    // Minecraft Tab
     if (settings.resolution) {
-        // Migration: If detected old default, swap to new default per user request
-        let w = parseInt(settings.resolution.width);
-        let h = parseInt(settings.resolution.height);
-        if(w === 1280 && h === 720) {
-            w = 854; h = 480;
+        s_gameWidth.value = settings.resolution.width || 1280;
+        s_gameHeight.value = settings.resolution.height || 720;
+    }
+    s_fullscreen.checked = settings.fullscreen || false;
+    s_autoconnect.checked = !!settings.autoConnectIP;
+    s_detached.checked = settings.closeLauncher !== false; 
+
+    // Java Tab
+    let currentRam = 4096;
+    if (settings.maxRam) {
+        currentRam = parseInt(settings.maxRam);
+    }
+    s_ramSlider.value = currentRam;
+    s_ramSlider.dispatchEvent(new Event('input')); // Update visual
+
+    // New Java Logic - Populate Fields from Config
+    // Assuming config has javaPath17, javaPath8 etc. If not, use standard 'javaPath' as fallback for priority one.
+    const jp17 = document.getElementById('java-path-17');
+    const jp8 = document.getElementById('java-path-8');
+    const jp21 = document.getElementById('java-path-21');
+
+    if (jp17) jp17.value = settings.javaPath17 || settings.javaPath || "";
+    if (jp8) jp8.value = settings.javaPath8 || "";
+    if (jp21) jp21.value = settings.javaPath21 || "";
+
+    // Wire up Browse Buttons for the cards
+    const bindBrowse = (browseId, inputId) => {
+        const fileInput = document.getElementById(browseId);
+        if(fileInput) {
+            fileInput.onchange = (e) => {
+                if(e.target.files[0]) {
+                     document.getElementById(inputId).value = e.target.files[0].path;
+                }
+            };
         }
-        resWidthInput.value = w || 854;
-        resHeightInput.value = h || 480;
-    } else {
-        resWidthInput.value = 854;
-        resHeightInput.value = 480;
-    }
+    };
+    bindBrowse('browse-17', 'java-path-17');
+    bindBrowse('browse-8', 'java-path-8');
+    bindBrowse('browse-21', 'java-path-21');
 
-    fullscreenToggle.checked = settings.fullscreen || false;
-    closeLauncherToggle.checked = settings.closeLauncher !== false; // Default true
-    debugConsoleToggle.checked = settings.debugConsole || false;
 
-    // Innovation Fields
-    if(settings.autoConnectIP) document.getElementById('auto-connect-ip').value = settings.autoConnectIP;
-    if(settings.discordRPC !== undefined) document.getElementById('discord-rpc-toggle').checked = settings.discordRPC;
+    s_javaArgs.value = settings.jvmArgs || "";
 
-    // Appearance Fields
-    if(settings.bgOpacity !== undefined) {
-        document.getElementById('bg-opacity-slider').value = settings.bgOpacity;
-        document.querySelector('.container').style.backgroundColor = `rgba(0, 0, 0, ${settings.bgOpacity / 100})`;
-    }
-    if(settings.roundedCorners === false) {
-        document.getElementById('rounded-corners-toggle').checked = false;
-        document.body.classList.add('sharp-corners');
-    } else {
-        document.getElementById('rounded-corners-toggle').checked = true;
-        document.body.classList.remove('sharp-corners');
-    }
-
-    // Preset Selection
-    const presets = document.querySelectorAll('.preset-btn');
-    if (settings.optimizationPreset) {
-        presets.forEach(p => {
-            if(p.id === settings.optimizationPreset) p.classList.add('active');
-            else p.classList.remove('active');
-        });
-    }
-
-    // Switch Screens (Use CSS Class for Layout Hygiene)
-    document.body.classList.add('settings-active');
+    // Launcher Tab
+    s_prerelease.checked = false; 
+    s_dataDir.value = "Default (AppData/.hg_oo)";
     
-    // Explicitly Hide Header Elements to prevent layout shift bugs
-    if(document.querySelector('.game-nav-container')) document.querySelector('.game-nav-container').style.display = 'none';
-    document.querySelector('.user-profile-btn').style.display = 'none';
+    // ==========================================
+    // THEME CAROUSEL LOGIC
+    // ==========================================
+    const carouselContainer = document.getElementById('theme-carousel-container');
+    if (carouselContainer) {
+        carouselContainer.innerHTML = '<div class="loading-themes"><i class="fas fa-circle-notch fa-spin"></i> Chargement...</div>';
+        
+        try {
+            const themes = await window.api.getThemes();
+            carouselContainer.innerHTML = ''; // Clear loading
+            
+            if (themes.length === 0) {
+                carouselContainer.innerHTML = '<p style="color:#888;">Aucun thème trouvé (src/assets/themes).</p>';
+            }
+
+            themes.forEach(theme => {
+                const card = document.createElement('div');
+                card.className = 'theme-card';
+                // Check if this is the active theme
+                if (settings.activeTheme === theme.id) {
+                    card.classList.add('active');
+                }
+
+                // Video Path (Relative to index.html)
+                const videoSrc = `assets/themes/${theme.folder}/background.mp4`;
+
+                card.innerHTML = `
+                    <div class="theme-preview">
+                        <video muted loop preload="metadata">
+                            <source src="${videoSrc}" type="video/mp4">
+                        </video>
+                        <i class="fas fa-play preview-play-icon"></i>
+                    </div>
+                    <div class="theme-info">
+                        <span class="theme-title" title="${theme.title}">${theme.title}</span>
+                        <div class="theme-color-dot" style="background-color: ${theme.accentColor}"></div>
+                    </div>
+                `;
+
+                // Hover Effects for Video
+                const video = card.querySelector('video');
+                card.addEventListener('mouseenter', () => { video.play().catch(e => {}); });
+                card.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });
+
+                // Click to Apply
+                card.addEventListener('click', async () => {
+                    // Update UI immediately (Real-time)
+                    document.documentElement.style.setProperty('--primary-pink', theme.accentColor);
+                    
+                    const bgVideo = document.getElementById('bg-video');
+                    if (bgVideo) {
+                        bgVideo.src = videoSrc;
+                        bgVideo.play().catch(e => console.error(e));
+                    }
+
+                    // Update Active Class
+                    document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('active'));
+                    card.classList.add('active');
+
+                    // Save to Config (Merge with existing)
+                    try {
+                        const currentSettings = await window.api.getSettings();
+                        await window.api.saveSettings({
+                            ...currentSettings,
+                            activeTheme: theme.id,
+                            accentColor: theme.accentColor
+                        });
+                        
+                        // Update local settings object if valid
+                        if (typeof settings !== 'undefined') {
+                            settings.activeTheme = theme.id;
+                            settings.accentColor = theme.accentColor;
+                        }
+                    } catch (err) {
+                        console.error("Error saving theme:", err);
+                    }
+                });
+
+                carouselContainer.appendChild(card);
+            });
+
+        } catch (e) {
+            console.error("Failed to load themes:", e);
+            carouselContainer.innerHTML = '<p style="color:#f55;">Erreur de chargement des thèmes.</p>';
+        }
+    }
+
+    /* REMOVED OLD COLOR PICKER LOGIC
+    const colorPicker = document.getElementById('accent-color-picker');
+    if (colorPicker) { ... }
+    */
+
+
+    // Account Tab (Populate)
+    const accContainer = document.getElementById('account-list-container');
+    accContainer.innerHTML = ''; // Clear
     
-    dashboardScreen.style.display = 'none';
-    settingsScreen.style.display = 'flex'; 
+    // Check for Active User (HG Studio or Microsoft)
+    let activeUser = null;
+    
+    // Priority to HG Studio Login
+    if (localStorage.getItem('hg_user_data')) {
+        try {
+            activeUser = JSON.parse(localStorage.getItem('hg_user_data'));
+            if (!activeUser.type) activeUser.type = 'hg_studio';
+        } catch (e) {}
+    } 
+    // Fallback to Microsoft Login
+    else if (localStorage.getItem('user_session')) {
+        try {
+            activeUser = JSON.parse(localStorage.getItem('user_session'));
+            if (!activeUser.type) activeUser.type = 'microsoft';
+        } catch (e) {}
+    }
+
+    if (activeUser) {
+        const typeLabel = activeUser.type === 'hg_studio' ? 'HG.Studio' : 'Microsoft';
+        const typeStyle = activeUser.type === 'hg_studio' ? 'color: #ff3377;' : 'color: #00a8fc;';
+        
+        // Avatar Logic
+        let avatarUrl = `https://minotar.net/helm/${activeUser.username || 'steve'}/100.png`;
+        if (activeUser.type === 'hg_studio') {
+            if (activeUser.avatar_url) avatarUrl = activeUser.avatar_url;
+            else if (activeUser.avatar) avatarUrl = activeUser.avatar;
+            else if (activeUser.profile_picture) avatarUrl = activeUser.profile_picture;
+        }
+
+        const card = document.createElement('div');
+        card.className = 'account-card selected';
+        card.innerHTML = `
+            <div class="acc-avatar" style="background-image: url('${avatarUrl}')"></div>
+            <div class="acc-details">
+                <span class="acc-name">${activeUser.username}</span>
+                <span class="acc-uuid" style="font-size: 12px; display: flex; align-items: center; gap: 5px; margin-top: 2px; ${typeStyle}">
+                    ${activeUser.type === 'hg_studio' ? '<i class="fas fa-cube"></i>' : '<i class="fab fa-microsoft"></i>'} 
+                    ${typeLabel} Account
+                </span>
+                <span class="acc-status" style="color: #4CAF50; font-size: 11px; display: block; margin-top: 4px;">● Connecté</span>
+            </div>
+        `;
+        accContainer.appendChild(card);
+    } else {
+        accContainer.innerHTML = '<p style="color:#888; text-align:center; padding: 20px;">Aucun compte connecté.</p>';
+    }
+
+
+    // Show Screen
+    settingsScreen.style.display = 'flex';
 });
 
-// Close Settings (Back to Dashboard)
-closeSettingsBtn.addEventListener('click', () => {
+// Browse Java
+if (s_browseJava) {
+    s_browseJava.addEventListener('click', async () => {
+        const path = await window.api.openFileDialog();
+        if (path) {
+            s_javaPath.value = path;
+        }
+    });
+}
+
+// Done / Save
+doneBtn.addEventListener('click', async () => {
+    doneBtn.innerText = "Sauvegarde...";
+    
+    // Remove active settings class
     document.body.classList.remove('settings-active');
+
+    const ramVal = s_ramSlider.value;
+    const autoConnectIP = s_autoconnect.checked ? "play.hg.studio" : "";
     
-    // Restore Header Elements
-    if(document.querySelector('.game-nav-container')) document.querySelector('.game-nav-container').style.display = 'flex';
-    document.querySelector('.user-profile-btn').style.display = 'flex';
-    
-    settingsScreen.style.display = 'none';
-    dashboardScreen.style.display = 'block';
-});
+    // Fetch current settings first to preserve Theme
+    let currentSettings = {};
+    try {
+        currentSettings = await window.api.getSettings();
+    } catch (e) { console.error("Could not fetch settings before save", e); }
 
-// RAM Slider Update
-const updateRamVisual = () => {
-    const min = parseInt(ramSlider.min);
-    const max = parseInt(ramSlider.max);
-    const val = parseInt(ramSlider.value);
-    const percentage = ((val - min) / (max - min)) * 100;
-    
-    // Update Slider Background Gradient
-    ramSlider.style.background = `linear-gradient(to right, var(--primary-pink) 0%, var(--primary-pink) ${percentage}%, #444 ${percentage}%, #444 100%)`;
-    
-    ramValue.innerText = val;
-};
-
-ramSlider.addEventListener('input', updateRamVisual);
-
-// Innovation: Presets Logic
-const presetQuality = document.getElementById('preset-quality');
-const presetBalanced = document.getElementById('preset-balanced');
-const presetPerformance = document.getElementById('preset-performance');
-const presets = [presetQuality, presetBalanced, presetPerformance];
-
-presets.forEach(btn => {
-    if(!btn) return;
-    btn.addEventListener('click', () => {
-        presets.forEach(p => p.classList.remove('active'));
-        btn.classList.add('active');
-
-        // Apply Logic
-        const totalMem = parseInt(sysRamTotal.innerText);
-        
-        if (btn.id === 'preset-performance') {
-            // Low RAM, Aggressive GC
-            ramSlider.value = Math.min(4096, totalMem * 0.5); 
-            jvmArgsInput.value = "-XX:+UseG1GC -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M";
-        } else if (btn.id === 'preset-balanced') {
-            // Standard
-            ramSlider.value = Math.min(6144, totalMem * 0.6);
-            jvmArgsInput.value = "";
-        } else if (btn.id === 'preset-quality') {
-            // High RAM
-            ramSlider.value = Math.min(8192, totalMem * 0.75);
-            jvmArgsInput.value = "-XX:+UseG1GC -XX:MaxGCPauseMillis=200";
-        }
-        
-        updateRamVisual();
-    });
-});
-
-// Innovation: Color Picker
-const colorOptions = document.querySelectorAll('.color-option');
-colorOptions.forEach(opt => {
-    opt.addEventListener('click', () => {
-        colorOptions.forEach(o => o.classList.remove('active'));
-        opt.classList.add('active');
-        const color = opt.getAttribute('data-color');
-        
-        // Update variable
-        document.documentElement.style.setProperty('--primary-pink', color);
-        // Also update any other theme vars
-        localStorage.setItem('theme-accent', color);
-    });
-});
-// Restore Theme
-const savedTheme = localStorage.getItem('theme-accent');
-if(savedTheme) {
-    document.documentElement.style.setProperty('--primary-pink', savedTheme);
-    colorOptions.forEach(o => {
-        if(o.getAttribute('data-color') === savedTheme) o.classList.add('active');
-    });
-}
-
-
-// Innovation: Opacity & Corners
-const bgOpacitySlider = document.getElementById('bg-opacity-slider');
-const roundedCornersToggle = document.getElementById('rounded-corners-toggle');
-
-if(bgOpacitySlider) {
-    bgOpacitySlider.addEventListener('input', () => {
-        const val = bgOpacitySlider.value / 100;
-        // Apply to main container
-        document.querySelector('.container').style.backgroundColor = `rgba(0, 0, 0, ${val})`;
-    });
-}
-if(roundedCornersToggle) {
-    roundedCornersToggle.addEventListener('change', () => {
-        if(roundedCornersToggle.checked) {
-            document.body.classList.remove('sharp-corners');
-        } else {
-            document.body.classList.add('sharp-corners');
-        }
-    });
-}
-
-// Save Settings
-saveSettingsBtn.addEventListener('click', async () => {
-    saveSettingsBtn.innerText = "SAUVEGARDE...";
-    saveSettingsBtn.disabled = true;
-
-    // Determine active preset
-    let activePresetId = null;
-    presets.forEach(p => { if(p.classList.contains('active')) activePresetId = p.id; });
+    // Java Path Logic - Read from new inputs
+    const jp17 = document.getElementById('java-path-17').value;
+    const jp8 = document.getElementById('java-path-8').value;
+    const jp21 = document.getElementById('java-path-21').value;
 
     const newSettings = {
-        minRam: '1024M',
-        maxRam: `${ramSlider.value}M`,
-        javaPath: javaPath17.value, // Main Java Path (1.20.1)
-        javaPath17: javaPath17.value,
-        javaPath8: javaPath8.value,
-        javaPath21: javaPath21.value,
-        jvmArgs: jvmArgsInput.value,
+        ...currentSettings, // MERGE EXISTING (Theme, etc)
+        minRam: `${ramVal}M`,
+        maxRam: `${ramVal}M`,
+        javaPath: jp17, // Primary
+        javaPath17: jp17,
+        javaPath8: jp8, // New config
+        javaPath21: jp21, // New config
+        jvmArgs: s_javaArgs.value,
         resolution: {
-            width: parseInt(resWidthInput.value) || 1280,
-            height: parseInt(resHeightInput.value) || 720
+            width: parseInt(s_gameWidth.value) || 1280,
+            height: parseInt(s_gameHeight.value) || 720
         },
-        fullscreen: fullscreenToggle.checked,
-        closeLauncher: closeLauncherToggle.checked,
-        debugConsole: debugConsoleToggle.checked,
+        fullscreen: s_fullscreen.checked,
+        closeLauncher: s_detached.checked,
+        autoConnectIP: autoConnectIP,
+        // accentColor and activeTheme are preserved from currentSettings
         
-        // Innovation Data
-        autoConnectIP: document.getElementById('auto-connect-ip').value,
-        discordRPC: document.getElementById('discord-rpc-toggle').checked,
-        optimizationPreset: activePresetId,
-        
-        // Appearance Data
-        bgOpacity: document.getElementById('bg-opacity-slider').value,
-        roundedCorners: document.getElementById('rounded-corners-toggle').checked
+        discordRPC: true 
     };
-
-    const result = await window.api.saveSettings(newSettings);
-
-    if (result.success) {
-        setTimeout(() => {
-            // Return to dashboard on save
-            document.body.classList.remove('settings-active');
-            
-            // Restore Header Elements
-            if(document.querySelector('.game-nav-container')) document.querySelector('.game-nav-container').style.display = 'flex';
-            document.querySelector('.user-profile-btn').style.display = 'flex';
-
-            settingsScreen.style.display = 'none';
-            dashboardScreen.style.display = 'block';
-
-            saveSettingsBtn.innerText = "ENREGISTRER";
-            saveSettingsBtn.disabled = false;
-        }, 500);
-    } else {
-        alert("Erreur lors de la sauvegarde !");
-        saveSettingsBtn.innerText = "ENREGISTRER";
-        saveSettingsBtn.disabled = false;
-    }
+    
+    await window.api.saveSettings(newSettings);
+    
+    doneBtn.innerText = "Terminé";
+    settingsScreen.style.display = 'none';
 });
+
+
 
 // =========================================
 // SERVER STATUS LOGIC
@@ -879,115 +1075,7 @@ function setupJavaBrowse(btnId, inputId) {
 
 setupJavaBrowse('browse-java-17', 'java-path-17');
 setupJavaBrowse('browse-java-8', 'java-path-8');
-setupJavaBrowse('browse-java-21', 'java-path-21');
 
-// =========================================
-// JAVA MANAGEMENT LOGIC
-// =========================================
-
-function setupJavaManagement(version, inputId) {
-    const installBtn = document.getElementById(`install-java-${version}`);
-    const detectBtn = document.getElementById(`detect-java-${version}`);
-    const testBtn = document.getElementById(`test-java-${version}`);
-    const input = document.getElementById(inputId);
-
-    // Load saved path
-    const savedPath = localStorage.getItem(`java-path-${version}`);
-    if (savedPath && input) {
-        input.value = savedPath;
-    }
-
-    // Save path helper
-    const savePath = (path) => {
-        if (input) input.value = path;
-        localStorage.setItem(`java-path-${version}`, path);
-    };
-
-    // Install
-    if (installBtn) {
-        installBtn.addEventListener('click', async () => {
-            // Show loading
-            loadingOverlay.style.display = 'flex';
-            loadingLog.innerText = `INSTALLATION JAVA ${version}...`;
-
-            try {
-                const result = await window.api.installJava(version);
-                if (result.success) {
-                    savePath(result.path);
-                    alert(`Java ${version} installé avec succès !`);
-                } else {
-                    alert(`Erreur: ${result.error}`);
-                }
-            } catch (e) {
-                alert("Erreur critique lors de l'installation.");
-            } finally {
-                loadingOverlay.style.display = 'none';
-            }
-        });
-    }
-
-    // Detect
-    if (detectBtn) {
-        detectBtn.addEventListener('click', async () => {
-            const path = await window.api.detectJava(version);
-            if (path) {
-                savePath(path);
-                detectBtn.innerHTML = '<i class="fas fa-check"></i> Found';
-                setTimeout(() => detectBtn.innerHTML = '<i class="fas fa-search"></i> Detect', 2000);
-            } else {
-                alert("Aucune installation locale trouvée pour cette version.");
-            }
-        });
-    }
-
-    // Test
-    if (testBtn) {
-        testBtn.addEventListener('click', async () => {
-            const path = input.value;
-            if (!path) {
-                alert("Veuillez d'abord sélectionner un chemin Java.");
-                return;
-            }
-
-            testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            const result = await window.api.testJava(path);
-            testBtn.innerHTML = '<i class="fas fa-play"></i> Test';
-
-            if (result.success) {
-                alert(`Succès !\n\n${result.version}`);
-            } else {
-                alert(`Échec du test :\n${result.error}`);
-            }
-        });
-    }
-}
-
-setupJavaManagement(17, 'java-path-17');
-setupJavaManagement(8, 'java-path-8');
-setupJavaManagement(21, 'java-path-21');
-
-// =========================================
-// RAM SLIDER VISUALS
-// =========================================
-
-function updateRamSliderVisuals() {
-    const min = parseInt(ramSlider.min);
-    const max = parseInt(ramSlider.max);
-    const val = parseInt(ramSlider.value);
-
-    const percentage = ((val - min) / (max - min)) * 100;
-
-    // Update the track background instead of the input
-    const track = document.querySelector('.ram-track');
-    if (track) {
-        // Pink fill on the left, dark on the right
-        track.style.background = `linear-gradient(to right, var(--primary-pink) 0%, var(--primary-pink) ${percentage}%, rgba(255,255,255,0.1) ${percentage}%, rgba(255,255,255,0.1) 100%)`;
-    }
-}
-
-ramSlider.addEventListener('input', updateRamSliderVisuals);
-// Init
-updateRamSliderVisuals();
 
 // =========================================
 // MAP SYSTEM (LIVE MAP)

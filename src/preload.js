@@ -22,5 +22,6 @@ contextBridge.exposeInMainWorld('api', {
     getLauncherConfig: () => ipcRenderer.invoke('get-launcher-config'),
     restoreSession: (user) => ipcRenderer.invoke('restore-session', user),
     getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+    getThemes: () => ipcRenderer.invoke('get-themes'),
     updateRpc: (activity) => ipcRenderer.send('update-rpc', activity)
 });

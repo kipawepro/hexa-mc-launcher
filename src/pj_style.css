@@ -1,0 +1,194 @@
+:root {
+    --primary-pink: #ff0055; /* Default Accent */
+}
+
+/* Hardcoded replace of old pinks */
+a { color: var(--primary-pink); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+::selection {
+    background: var(--primary-pink);
+    color: #fff;
+}
+
+/* Hover Effect using filter - Works with any color variable */
+button:hover, .action-btn:hover, .java-btn:hover, .save-btn:hover {
+    filter: brightness(1.2); /* Brighten on hover instead of hardcoded color */
+    background-color: var(--primary-pink); /* Ensure base is variable if overridden */
+    transition: filter 0.2s, background-color 0.2s;
+}
+
+/* =========================================
+   CUSTOM SLIDER (RAM STYLE) - PJ REPLICA
+   ========================================= */
+.styled-slider {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 8px;
+    background: #444; /* Base dark grey */
+    border-radius: 4px; /* Rounded ends */
+    outline: none;
+    opacity: 0.9;
+    transition: opacity .2s;
+    position: relative;
+    cursor: pointer;
+}
+
+.styled-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    cursor: pointer;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1); /* Slight glow */
+    border: 2px solid var(--primary-pink); /* Colored ring */
+    margin-top: -6px; /* Center firmly */
+    transition: transform 0.1s;
+}
+
+.styled-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+}
+
+/* =========================================
+   JAVA CARD STYLES (PJ STYLE)
+   ========================================= */
+.java-version-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 12px;
+}
+
+.java-card-header {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #eee;
+    display: flex;
+    justify-content: space-between;
+}
+
+.java-path-input {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #aaa;
+    padding: 10px 12px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 12px;
+    margin-bottom: 12px;
+    box-sizing: border-box; /* Fix width overflow */
+}
+
+.java-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.java-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    text-transform: capitalize;
+}
+
+/* Action: Install Recommended */
+.btn-install-rec {
+    background: var(--primary-pink);
+    color: #fff;
+    flex: 1; /* Grow slightly */
+    white-space: nowrap;
+}
+
+/* Action: Secondary (Detect, Browse, Test) */
+.btn-secondary {
+    background: #333;
+    color: #ddd;
+    border: 1px solid #444;
+}
+.btn-secondary:hover {
+    background: #444;
+    border-color: #555;
+    filter: none; /* Don't brighten secondary buttons too much */
+}
+
+/* =========================================
+   PROFILE DROPDOWN REDESIGN
+   ========================================= */
+.profile-dropdown {
+    /* Overriding previous generic styles */
+    top: 60px !important;
+    left: 20px !important;
+    right: auto !important;
+    width: 220px;
+    
+    background: rgba(20, 20, 20, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px; /* Matching the button's 6px-8px look */
+    padding: 6px;
+    
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    backdrop-filter: blur(15px);
+    z-index: 9999;
+}
+
+.dropdown-item {
+    padding: 10px 14px;
+    margin: 2px 0;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #ccc;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid transparent;
+}
+
+.dropdown-item i {
+    width: 16px;
+    text-align: center;
+    color: #888;
+    transition: color 0.2s;
+}
+
+.dropdown-item:hover {
+    background: rgba(255, 255, 255, 0.08); /* White tint on hover */
+    color: #fff;
+    border-color: rgba(255,255,255,0.05); /* Subtle border on hover */
+}
+
+.dropdown-item:hover i {
+    color: var(--primary-pink); /* Icon lights up */
+}
+
+/* Divider if needed */
+.dropdown-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 4px 8px;
+}
+
+/* Danger Item (Logout) override */
+.dropdown-item.danger:hover {
+    background: rgba(255, 50, 50, 0.15);
+    color: #ff5555;
+    border-color: rgba(255, 50, 50, 0.2);
+}
+.dropdown-item.danger:hover i {
+    color: #ff5555;
+}
+

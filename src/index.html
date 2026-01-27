@@ -6,10 +6,17 @@
     <title>hg.studio minecraft</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="new_design.css">
+    <link rel="stylesheet" href="pj_style.css"> <!-- New PJ Styles -->
+    <link rel="stylesheet" href="theme_style.css"> <!-- Theme Carousel -->
     <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
+    <!-- Intro Screen -->
+    <div id="intro-screen">
+        <img src="assets/logo.svg" alt="HG" class="intro-logo">
+    </div>
+
     <div class="app-border">
         <!-- Background Video -->
         <div class="video-background">
@@ -121,6 +128,8 @@
                         <button id="btn-instagram" class="social-btn" title="Instagram"><i class="fab fa-instagram"></i></button>
                         <button id="btn-tiktok" class="social-btn" title="TikTok"><i class="fab fa-tiktok"></i></button>
                         <button class="social-btn" title="Website"><i class="fas fa-globe"></i></button>
+                        <!-- LEANE SPECIAL BTN -->
+                        <button id="btn-leane" class="social-btn special-leane" title="Pour toi" style="display: none;"><i class="fas fa-heart"></i></button>
                     </div>
 
                     <!-- Center: PLAY Button -->
@@ -164,270 +173,262 @@
 
             </div>
 
-            <!-- Settings Screen (Full Page) -->
+            <!-- Settings Screen (Redesigned - Helios Style) -->
             <div id="settings-screen" class="settings-page" style="display: none;">
-                <div class="settings-container-full">
-                    <!-- Sidebar -->
+                <div class="settings-layout">
+                    <!-- Left Sidebar -->
                     <div class="settings-sidebar">
-                        
-                        <!-- User Profile Card (Sidebar) -->
-                        <div class="settings-profile-card">
-                            <div class="settings-avatar" id="setting-user-avatar"></div>
-                            <div class="settings-user-details">
-                                <div class="settings-user-name" id="setting-user-name">Steve</div>
-                                <div class="settings-user-role">HG Account</div>
-                            </div>
-                            <!-- Arrow Removed -->
+                        <div class="settings-header">
+                            <h2 class="settings-main-title">Paramètres</h2>
                         </div>
+                        
+                        <nav class="settings-nav-menu">
+                            <div class="nav-item active" data-tab="account">
+                                <span class="nav-label">Compte</span>
+                            </div>
+                            <div class="nav-item" data-tab="minecraft">
+                                <span class="nav-label">Jeu</span>
+                            </div>
+                            <div class="nav-item" data-tab="java">
+                                <span class="nav-label">Java</span>
+                            </div>
+                            <div class="nav-item" data-tab="launcher">
+                                <span class="nav-label">Launcher</span>
+                            </div>
+                            <div class="nav-item" data-tab="about">
+                                <span class="nav-label">Mise à jour</span>
+                            </div>
+                        </nav>
 
-                        <div class="settings-title">PARAMÈTRES</div>
-                        <ul class="settings-nav">
-                            <li class="active" data-tab="tab-java">
-                                <i class="fab fa-java"></i> Java & Mémoire
-                            </li>
-                            <li data-tab="tab-game">
-                                <i class="fas fa-gamepad"></i> Jeu & Affichage
-                            </li>
-                            <li data-tab="tab-launcher">
-                                <i class="fas fa-rocket"></i> Launcher
-                            </li>
-                        </ul>
-                        <div class="settings-actions">
-                            <button id="save-settings-btn" class="save-btn">ENREGISTRER</button>
-                            <button id="close-settings-btn" class="cancel-btn">RETOUR</button>
+                        <div class="settings-sidebar-footer">
+                            <button id="close-settings-btn" class="done-btn">Terminé</button>
                         </div>
                     </div>
 
                     <!-- Content Area -->
-                    <div class="settings-content-area">
-
-                        <!-- Tab: Java & Memory -->
-                        <div id="tab-java" class="settings-tab active">
-                            <h2>Configuration Java</h2>
-                            <p class="tab-desc">Gérez la mémoire allouée et les versions de Java.</p>
-
-                            <div class="setting-group">
-                                <label>Mémoire RAM Allouée</label>
-                                <div class="ram-control-container">
-                                    <div class="ram-info">
-                                        <span>Total Système : <strong id="sys-ram-total">--</strong> MB</span>
-                                        <span>Alloué : <strong id="ram-value">4096</strong> MB</span>
-                                    </div>
-                                    <div class="slider-wrapper">
-                                        <div class="ram-track"></div>
-                                        <input type="range" id="ram-slider" min="1024" max="16384" step="512" value="4096">
-                                    </div>
-                                </div>
+                    <div class="settings-content">
+                        
+                        <!-- TAB: Account -->
+                        <div id="tab-account" class="tab-content active">
+                            <div class="tab-header">
+                                <h2>Paramètres de Compte</h2>
+                                <p>Gérez vos comptes connectés.</p>
                             </div>
 
-                            <div class="java-versions-list">
-                                <!-- Java 21 -->
-                                <div class="java-version-card">
-                                    <div class="java-card-header">
-                                        <span class="java-label">Java 21 location</span>
-                                    </div>
-                                    <div class="java-input-group">
-                                        <input type="text" id="java-path-21" placeholder="/path/to/java" readonly>
-                                    </div>
-                                    <div class="java-actions">
-                                        <button class="java-btn recommend" onclick="window.api.openExternal('https://adoptium.net')">
-                                            <i class="fas fa-download"></i> Install recommended
-                                        </button>
-                                        <button class="java-btn" id="detect-java-21"><i class="fas fa-search"></i> Detect</button>
-                                        <button class="java-btn" id="browse-java-21"><i class="fas fa-folder-open"></i> Browse</button>
-                                        <button class="java-btn" id="test-java-21"><i class="fas fa-play"></i> Test</button>
-                                    </div>
+                            <div class="account-section">
+                                <div class="account-type-header">
+                                    <div class="account-icon-ms"><i class="fas fa-users"></i> Comptes</div>
+                                    <!-- Add button removed as requested -->
                                 </div>
-
-                                <!-- Java 17 (Main) -->
-                                <div class="java-version-card">
-                                    <div class="java-card-header">
-                                        <span class="java-label">Java 17 location (Recommandé 1.20.1)</span>
-                                    </div>
-                                    <div class="java-input-group">
-                                        <input type="text" id="java-path-17" placeholder="/path/to/java">
-                                    </div>
-                                    <div class="java-actions">
-                                        <button class="java-btn recommend" id="install-java-17">
-                                            <i class="fas fa-download"></i> Install recommended
-                                        </button>
-                                        <button class="java-btn" id="detect-java-17"><i class="fas fa-search"></i> Detect</button>
-                                        <button class="java-btn" id="browse-java-17"><i class="fas fa-folder-open"></i> Browse</button>
-                                        <button class="java-btn" id="test-java-17"><i class="fas fa-play"></i> Test</button>
-                                    </div>
+                                <div class="account-list" id="account-list-container">
+                                    <!-- Accounts injected by JS -->
                                 </div>
-
-                                <!-- Java 8 -->
-                                <div class="java-version-card">
-                                    <div class="java-card-header">
-                                        <span class="java-label">Java 8 location</span>
-                                    </div>
-                                    <div class="java-input-group">
-                                        <input type="text" id="java-path-8" placeholder="/path/to/java" readonly>
-                                    </div>
-                                    <div class="java-actions">
-                                        <button class="java-btn recommend" onclick="window.api.openExternal('https://adoptium.net')">
-                                            <i class="fas fa-download"></i> Install recommended
-                                        </button>
-                                        <button class="java-btn" id="detect-java-8"><i class="fas fa-search"></i> Detect</button>
-                                        <button class="java-btn" id="browse-java-8"><i class="fas fa-folder-open"></i> Browse</button>
-                                        <button class="java-btn" id="test-java-8"><i class="fas fa-play"></i> Test</button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="setting-group" style="margin-top: 20px;">
-                                <label>Arguments JVM (Avancé)</label>
-                                <input type="text" id="jvm-args" placeholder="-XX:+UseG1GC ...">
                             </div>
                         </div>
 
-                        <!-- Tab: Game & Display -->
-                        <div id="tab-game" class="settings-tab">
-                            <h2>Jeu & Affichage</h2>
-                            <p class="tab-desc">Personnalisez la fenêtre de jeu et l'expérience en jeu.</p>
+                        <!-- TAB: Minecraft -->
+                        <div id="tab-minecraft" class="tab-content">
+                            <div class="tab-header">
+                                <h2>Paramètres du Jeu</h2>
+                                <p>Options de lancement du jeu.</p>
+                            </div>
 
-                            <div class="setting-row">
-                                <div class="setting-group half">
-                                    <label>Largeur (px)</label>
-                                    <input type="number" id="res-width" value="854">
-                                </div>
-                                <div class="setting-group half">
-                                    <label>Hauteur (px)</label>
-                                    <input type="number" id="res-height" value="480">
+                            <div class="setting-item">
+                                <label>Résolution du Jeu</label>
+                                <div class="resolution-inputs">
+                                    <input type="number" id="game-width" class="res-input" value="1280">
+                                    <span class="res-x">x</span>
+                                    <input type="number" id="game-height" class="res-input" value="720">
                                 </div>
                             </div>
 
-                            <div class="setting-group checkbox-group">
+                            <div class="setting-item toggle-row">
+                                <label for="s-fullscreen">Lancer en plein écran.</label>
                                 <label class="switch">
-                                    <input type="checkbox" id="fullscreen-toggle">
+                                    <input type="checkbox" id="s-fullscreen">
                                     <span class="slider round"></span>
                                 </label>
-                                <span class="checkbox-label">Lancer en plein écran</span>
                             </div>
 
-                            <!-- NEW: Auto Connect -->
-                            <div class="setting-group" style="margin-top: 20px;">
-                                <label>Connexion Automatique (IP Serveur)</label>
-                                <input type="text" id="auto-connect-ip" placeholder="ex: play.hg.studio">
+                            <div class="setting-item toggle-row">
+                                <label for="s-autoconnect">Connexion auto au serveur.</label>
+                                <label class="switch">
+                                    <input type="checkbox" id="s-autoconnect">
+                                    <span class="slider round"></span>
+                                </label>
                             </div>
 
-                            <!-- NEW: Optimization Presets -->
-                            <div class="setting-group" style="margin-top: 20px;">
-                                <label>Optimisation & Performance</label>
-                                <div class="preset-buttons">
-                                    <button class="preset-btn" id="preset-quality" title="Graphismes Maximum">
-                                        <i class="fas fa-star"></i> Qualité
-                                    </button>
-                                    <button class="preset-btn" id="preset-balanced" title="Équilibré">
-                                        <i class="fas fa-balance-scale"></i> Équilibré
-                                    </button>
-                                    <button class="preset-btn" id="preset-performance" title="FPS Maximum">
-                                        <i class="fas fa-bolt"></i> Performance
-                                    </button>
+                            <div class="setting-item toggle-row">
+                                <div class="setting-text">
+                                    <label for="s-detached">Fermer le launcher au lancement.</label>
+                                    <p class="setting-desc">Si désactivé, le launcher restera ouvert en arrière-plan.</p>
                                 </div>
-                            </div>
-                            
-                            <div class="setting-group" style="margin-top:15px">
-                                  <button class="secondary-btn full-width" onclick="window.api.openExternal('file://')"> <!-- Pseudo-call, handled in JS -->
-                                    <i class="fas fa-folder"></i> Ouvrir le dossier du jeu
-                                  </button>
+                                <label class="switch">
+                                    <input type="checkbox" id="s-detached">
+                                    <span class="slider round"></span>
+                                </label>
                             </div>
                         </div>
 
-                        <!-- Tab: Launcher -->
-                        <div id="tab-launcher" class="settings-tab">
-                            <h2>Options du Launcher</h2>
-                            <p class="tab-desc">Personnalisation et fonctionnalités avancées.</p>
-
-                            <!-- Customization Section -->
-                            <div class="setting-card">
-                                <div class="setting-header">
-                                    <i class="fas fa-paint-brush"></i>
-                                    <span>Apparence</span>
-                                </div>
-                                <div class="setting-group">
-                                    <label>Couleur d'accentuation</label>
-                                    <div class="color-picker-row">
-                                        <div class="color-option active" style="--c: #ff0055" data-color="#ff0055"></div> <!-- HG Pink -->
-                                        <div class="color-option" style="--c: #00ff88" data-color="#00ff88"></div> <!-- Lime -->
-                                        <div class="color-option" style="--c: #00ccff" data-color="#00ccff"></div> <!-- Cyan -->
-                                        <div class="color-option" style="--c: #aa00ff" data-color="#aa00ff"></div> <!-- Purple -->
-                                        <div class="color-option" style="--c: #ffaa00" data-color="#ffaa00"></div> <!-- Orange -->
-                                    </div>
-                                </div>
-                                
-                                <div class="setting-group" style="margin-top: 15px;">
-                                    <label>Opacité du fond</label>
-                                    <input type="range" id="bg-opacity-slider" min="50" max="100" value="90" class="mini-slider">
-                                </div>
-
-                                <div class="setting-group checkbox-group">
-                                    <label class="switch">
-                                        <input type="checkbox" id="rounded-corners-toggle" checked>
-                                        <span class="slider round"></span>
-                                    </label>
-                                    <span class="checkbox-label">Coins arrondis</span>
-                                </div>
+                        <!-- TAB: Java -->
+                        <div id="tab-java" class="tab-content">
+                            <div class="tab-header">
+                                <h2>Paramètres Java</h2>
+                                <p>Configuration Java et mémoire.</p>
                             </div>
 
-                            <div class="setting-card">
-                                <div class="setting-header">
-                                    <i class="fas fa-rocket"></i>
-                                    <span>Comportement</span>
+                            <div class="setting-item">
+                                <div class="ram-header" style="margin-bottom: 5px;">
+                                    <label>Allocation Mémoire (Min & Max)</label>
+                                    <span class="ram-display" style="color:var(--primary-pink); font-weight:bold;"><span id="ram-display-val">4096</span> MB</span>
                                 </div>
-                                <div class="setting-group checkbox-group">
-                                    <label class="switch">
-                                        <input type="checkbox" id="close-launcher-toggle" checked>
-                                        <span class="slider round"></span>
-                                    </label>
-                                    <span class="checkbox-label">Fermer le launcher après le lancement du jeu</span>
+                                <div class="ram-slider-container">
+                                    <input type="range" id="java-ram-slider" min="1024" max="16384" step="512" class="styled-slider">
                                 </div>
-                                <div class="setting-group checkbox-group">
-                                    <label class="switch">
-                                        <input type="checkbox" id="debug-console-toggle">
-                                        <span class="slider round"></span>
-                                    </label>
-                                    <span class="checkbox-label">Afficher la console de jeu (Debug)</span>
+                                <div class="ram-stats">
+                                    <span>Disponible : <span id="sys-ram-free">--</span> GB</span>
+                                    <span>Total : <span id="sys-ram-total">--</span> GB</span>
                                 </div>
                             </div>
                             
-                            <!-- Innovation: Social -->
-                            <div class="setting-card">
-                                <div class="setting-header">
-                                    <i class="fab fa-discord"></i>
-                                    <span>Social</span>
+                            <hr style="border:0; border-top:1px solid rgba(255,255,255,0.05); margin: 20px 0;">
+
+                            <div class="setting-item">
+                                <label style="margin-bottom: 15px; display:block;">Versions Java</label>
+                                
+                                <!-- Java 21 Card -->
+                                <div class="java-version-card">
+                                    <div class="java-card-header">
+                                        <span>Java 21 location</span>
+                                    </div>
+                                    <input type="text" class="java-path-input" id="java-path-21" placeholder="/path/to/java">
+                                    <div class="java-actions">
+                                        <button class="java-action-btn btn-install-rec"><i class="fas fa-download"></i> Install recommended</button>
+                                        <button class="java-action-btn btn-secondary"><i class="fas fa-search"></i> Detect</button>
+                                        <button class="java-action-btn btn-secondary" onclick="document.getElementById('browse-21').click()"><i class="fas fa-folder-open"></i> Browse</button>
+                                        <button class="java-action-btn btn-secondary"><i class="fas fa-play"></i> Test</button>
+                                        <input type="file" id="browse-21" style="display:none">
+                                    </div>
                                 </div>
-                                <div class="setting-group checkbox-group">
-                                    <label class="switch">
-                                        <input type="checkbox" id="discord-rpc-toggle" checked>
-                                        <span class="slider round"></span>
-                                    </label>
-                                    <span class="checkbox-label">Discord Rich Presence</span>
+
+                                <!-- Java 17 Card -->
+                                <div class="java-version-card">
+                                    <div class="java-card-header">
+                                        <span>Java 17 location (Recommandé 1.20.1)</span>
+                                    </div>
+                                    <input type="text" class="java-path-input" id="java-path-17" placeholder="/path/to/java">
+                                    <div class="java-actions">
+                                        <button class="java-action-btn btn-install-rec"><i class="fas fa-download"></i> Install recommended</button>
+                                        <button class="java-action-btn btn-secondary"><i class="fas fa-search"></i> Detect</button>
+                                        <button class="java-action-btn btn-secondary" onclick="document.getElementById('browse-17').click()"><i class="fas fa-folder-open"></i> Browse</button>
+                                        <button class="java-action-btn btn-secondary"><i class="fas fa-play"></i> Test</button>
+                                        <input type="file" id="browse-17" style="display:none">
+                                    </div>
+                                </div>
+
+                                <!-- Java 8 Card -->
+                                <div class="java-version-card">
+                                    <div class="java-card-header">
+                                        <span>Java 8 location</span>
+                                    </div>
+                                    <input type="text" class="java-path-input" id="java-path-8" placeholder="/path/to/java">
+                                    <div class="java-actions">
+                                        <button class="java-action-btn btn-install-rec"><i class="fas fa-download"></i> Install recommended</button>
+                                        <button class="java-action-btn btn-secondary"><i class="fas fa-search"></i> Detect</button>
+                                        <button class="java-action-btn btn-secondary" onclick="document.getElementById('browse-8').click()"><i class="fas fa-folder-open"></i> Browse</button>
+                                        <button class="java-action-btn btn-secondary"><i class="fas fa-play"></i> Test</button>
+                                        <input type="file" id="browse-8" style="display:none">
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            <div class="setting-item">
+                                <label>Arguments JVM</label>
+                                <div class="input-container">
+                                    <input type="text" id="java-args-input" class="text-input-styled" placeholder="-XX:+UnlockExperimentalVMOptions ...">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB: Launcher -->
+                        <div id="tab-launcher" class="tab-content">
+                            <div class="tab-header">
+                                <h2>Paramètres Launcher</h2>
+                                <p>Personnalisation et options.</p>
+                            </div>
+
+                            <div class="setting-item">
+                                <label>Thème et Ambiance</label>
+                                <div id="theme-carousel-container" class="theme-carousel-container">
+                                    <!-- Carousel will be injected here by JS -->
+                                    <div class="loading-themes">Chargement des thèmes...</div>
                                 </div>
                             </div>
 
-                            <div class="setting-card">
-                                <div class="setting-header">
-                                    <i class="fas fa-sync-alt"></i>
-                                    <span>Mises à jour</span>
+                            <!-- Secret Setting for Leane -->
+                            <div class="setting-item toggle-row" id="setting-leane-container" style="display: none;">
+                                <div class="setting-text">
+                                    <label for="s-love-popup">Afficher le message d'amour au lancement</label>
+                                    <p class="setting-desc">Si désactivé, le popup ne s'affichera plus.</p>
                                 </div>
-                                <div class="update-section">
-                                    <div class="current-version">
-                                        <span class="label">Version actuelle :</span>
-                                        <span class="value" id="current-version">Loading...</span>
+                                <label class="switch">
+                                    <input type="checkbox" id="s-love-popup" checked>
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+
+                            <div class="setting-item toggle-row">
+                                <div class="setting-text">
+                                    <label for="s-prerelease">Autoriser les versions Bêta.</label>
+                                    <p class="setting-desc">Reçoit les mises à jour avant tout le monde (Instable).</p>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="s-prerelease">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+
+                            <div class="setting-item">
+                                <label>Dossier de Données</label>
+                                <div class="file-input-group">
+                                    <div class="file-path-display">
+                                        <i class="fas fa-folder"></i>
+                                        <input type="text" id="data-dir-input" readonly>
                                     </div>
-                                    <button id="check-update-btn" class="action-btn">
-                                        <i class="fas fa-search"></i> Vérifier les mises à jour
-                                    </button>
-                                    <p id="update-status" class="status-msg"></p>
+                                    <button class="file-browse-btn" id="open-data-dir-btn">Ouvrir</button>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB: Update (Renamed from About) -->
+                        <div id="tab-about" class="tab-content">
+                            <div class="tab-header">
+                                <h2>Mise à jour</h2>
+                                <p>Gérez les mises à jour système.</p>
+                            </div>
+                            <div class="update-section-files" style="padding: 20px 0;">
+                                <div class="current-version-card" style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                                    <span class="version-label" style="font-weight: 600;">Version actuelle</span>
+                                    <span class="version-number" id="app-version-display" style="font-family: monospace; color: #888;">v--</span>
+                                </div>
+                                
+                                <button id="check-update-btn" class="action-btn" style="width: 100%; padding: 15px; background: #333; text-align: center;">
+                                    <i class="fas fa-sync-alt"></i> Rechercher une mise à jour
+                                </button>
+                                <p id="update-status" class="status-msg" style="margin-top: 15px; text-align: center; color: #aaa; min-height: 20px;"></p>
+                            </div>
+                            
+                            <div class="credits-mini" style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px; text-align: center; color: #444; font-size: 11px;">
+                                HG Launcher - Copyright © 2025 HG.Studio
                             </div>
                         </div>
 
                     </div>
                 </div>
             </div>
+
+
         </div>
     </div>
 
@@ -458,6 +459,27 @@
             </div>
             <p id="popup-update-status" class="status-msg"></p>
         </div>
+    </div>
+
+    <!-- Love Popup (Hidden) -->
+    <div id="love-popup" style="display: none;">
+        <div class="love-content">
+            <h1 class="love-title">Coucou chat <i class="fas fa-heart"></i></h1>
+            <p class="love-text">Je t'aime fort mon amour !! amuse toi bien hihi !</p>
+            <div class="love-actions">
+                <label class="love-switch">
+                    <input type="checkbox" id="love-popup-checkbox">
+                    <span class="love-slider"></span>
+                    <span class="love-label">Ne plus afficher</span>
+                </label>
+                <button id="love-close-btn" class="love-btn">Mouaahh bisous ! <i class="fas fa-kiss-wink-heart"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Love Footer (Hidden) -->
+    <div id="love-footer" style="display: none;">
+        je t'aime fort princesse oublie le jamais ! <i class="fas fa-heart"></i>
     </div>
 
     <!-- Window Controls (Global Overlay) -->
