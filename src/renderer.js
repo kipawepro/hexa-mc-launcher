@@ -1087,25 +1087,100 @@ if (checkUpdateBtn) {
 }
 
 // =========================================
-// JAVA PATH BROWSING
+// JAVA MANAGMENT LOGIC
 // =========================================
 
-function setupJavaBrowse(btnId, inputId) {
-    const btn = document.getElementById(btnId);
+function setupJavaControls(version) {
+    const inputId = `java-path-${version}`;
+    const installBtnId = `btn-install-${version}`;
+    const detectBtnId = `btn-detect-${version}`;
+    const browseBtnId = `btn-browse-${version}`;
+    const testBtnId = `btn-test-${version}`;
+    
     const input = document.getElementById(inputId);
-
-    if (btn && input) {
-        btn.addEventListener('click', async () => {
+    const installBtn = document.getElementById(installBtnId);
+    const detectBtn = document.getElementById(detectBtnId);
+    const browseBtn = document.getElementById(browseBtnId);
+    const testBtn = document.getElementById(testBtnId);
+    
+    // Install
+    if (installBtn) {
+        installBtn.addEventListener('click', async () => {
+             const originalContent = installBtn.innerHTML;
+             installBtn.disabled = true;
+             installBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Installation...`;
+             
+             try {
+                 const result = await window.api.installJava(version);
+                 if (result.success && result.path) {
+                     input.value = result.path;
+                     installBtn.innerHTML = `<i class="fas fa-check"></i> Installé !`;
+                     setTimeout(() => {
+                        installBtn.innerHTML = originalContent;
+                        installBtn.disabled = false;
+                     }, 3000);
+                 } else {
+                     alert("Erreur d'installation: " + (result.error || "Inconnue"));
+                     installBtn.innerHTML = `<i class="fas fa-times"></i> Erreur`;
+                     setTimeout(() => { installBtn.innerHTML = originalContent; installBtn.disabled = false; }, 3000);
+                 }
+             } catch (e) {
+                 console.error(e);
+                 alert("Erreur critique: " + e);
+                 installBtn.innerHTML = originalContent;
+                 installBtn.disabled = false;
+             }
+        });
+    }
+    
+    // Detect
+    if (detectBtn) {
+        detectBtn.addEventListener('click', async () => {
+             detectBtn.disabled = true;
+             detectBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
+             
+             const path = await window.api.detectJava(version);
+             if (path) {
+                 input.value = path;
+             } else {
+                 alert(`Java ${version} non trouvé automatiquement.`);
+             }
+             
+             detectBtn.innerHTML = `<i class="fas fa-search"></i> Detect`;
+             detectBtn.disabled = false;
+        });
+    }
+    
+    // Browse
+    if (browseBtn) {
+        browseBtn.addEventListener('click', async () => {
             const path = await window.api.openFileDialog();
             if (path) {
                 input.value = path;
             }
         });
     }
+    
+    // Test
+    if (testBtn) {
+        testBtn.addEventListener('click', async () => {
+             const path = input.value;
+             if (!path) return alert("Veuillez d'abord sélectionner un chemin Java.");
+             
+             testBtn.disabled = true;
+             testBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
+             
+             const result = await window.api.testJava(path);
+             alert(result.success ? "Test Réussi :\n" + result.output : "Echec du test :\n" + result.output);
+             
+             testBtn.innerHTML = `<i class="fas fa-play"></i> Test`;
+             testBtn.disabled = false;
+        });
+    }
 }
 
-setupJavaBrowse('browse-java-17', 'java-path-17');
-setupJavaBrowse('browse-java-8', 'java-path-8');
+// Init Java Controls
+[21, 17, 8].forEach(v => setupJavaControls(v));
 
 
 // =========================================
