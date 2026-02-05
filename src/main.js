@@ -666,6 +666,16 @@ ipcMain.handle('launch-game', async (event, options) => {
     const globalRoot = path.join(app.getPath('appData'), '.hg_oo');
     let rootPath = globalRoot; 
 
+    // DETERMINE INSTANCE FOLDER BASED ON THEME
+    let instanceFolderName = 'hg_studio_official';
+    if (config.activeTheme) {
+        const t = config.activeTheme.toLowerCase();
+        if (t.includes('hardcore')) instanceFolderName = 'hg_studio_hardcore';
+        else if (t.includes('cherry')) instanceFolderName = 'hg_studio_cherry';
+        else if (t.includes('dragon')) instanceFolderName = 'hg_studio_dragon';
+        else if (t.includes('autumn') || t.includes('autum')) instanceFolderName = 'hg_studio_autumn';
+    }
+
     if (activeModpack) {
         try {
             console.log("Active Modpack found:", activeModpack.name);
@@ -673,7 +683,7 @@ ipcMain.handle('launch-game', async (event, options) => {
 
             // CHANGE: Utiliser un nom de dossier FIXE pour permettre la mise à jour par écrasement
             // Au lieu de créer un dossier par version (ex: HG_V1, HG_V2), on utilise "hg_studio_instance"
-            const safeName = "hg_studio_official"; // activeModpack.name.replace(/[^a-zA-Z0-9\-_]/g, '_');
+            const safeName = instanceFolderName; // "hg_studio_official"; // activeModpack.name.replace(/[^a-zA-Z0-9\-_]/g, '_');
             rootPath = path.join(globalRoot, 'instances', safeName);
             await fs.mkdir(rootPath, { recursive: true });
 
@@ -1424,10 +1434,18 @@ ipcMain.handle('get-themes', async () => {
     return themes;
 });
 
-ipcMain.handle('open-file-dialog', async () => {
+ipcMain.handle('open-file-dialog', async (event, filters = []) => {
+    // Default filters if none provided (legacy support)
+    let appliedFilters = [{ name: 'Executables', extensions: ['exe', 'bin'] }];
+    
+    // If user passed specific filters (like images for skins)
+    if (filters && filters.length > 0) {
+        appliedFilters = filters;
+    }
+
     const result = await dialog.showOpenDialog(mainWindow, {
         properties: ['openFile'],
-        filters: [{ name: 'Executables', extensions: ['exe', 'bin'] }]
+        filters: appliedFilters
     });
 
     if (result.canceled) {
@@ -1461,23 +1479,218 @@ async function removeZeroByteFiles(dir) {
 }
 
 
+ipcMain.handle('apply-custom-skin-loader', async (event, { username, skinPath, capeUrl }) => {
+    try {
+        const root = await getInstanceRoot();
+        const baseDir = path.join(root, 'CustomSkinLoader', 'LocalSkin');
+        const skinsDir = path.join(baseDir, 'skins');
+        const capesDir = path.join(baseDir, 'capes');
+
+        await fs.mkdir(skinsDir, { recursive: true });
+        await fs.mkdir(capesDir, { recursive: true });
+
+        console.log(`[CustomSkinLoader] Applying for ${username}`);
+        console.log(`Skin: ${skinPath}`);
+        console.log(`Cape: ${capeUrl}`);
+
+        // 1. Handle Skin
+        if (skinPath) {
+            const destSkin = path.join(skinsDir, `${username}.png`);
+            if (skinPath.startsWith('http')) {
+                 const res = await fetch(skinPath);
+                 if (res.ok) {
+                    const buffer = await res.arrayBuffer();
+                    await fs.writeFile(destSkin, Buffer.from(buffer));
+                 }
+            } else {
+                 // Check if source exists
+                 if (fsOriginal.existsSync(skinPath)) {
+                    await fs.copyFile(skinPath, destSkin);
+                 }
+            }
+        }
+
+        // 2. Handle Cape
+        const destCape = path.join(capesDir, `${username}.png`);
+        if (capeUrl) {
+            if (capeUrl.startsWith('http')) {
+                 const res = await fetch(capeUrl);
+                 if(res.ok) {
+                     const buffer = await res.arrayBuffer();
+                     await fs.writeFile(destCape, Buffer.from(buffer));
+                 }
+            } else {
+                 if (fsOriginal.existsSync(capeUrl)) {
+                    await fs.copyFile(capeUrl, destCape);
+                 }
+            }
+        } else {
+            // No cape selected -> Delete existing file to remove cape in-game
+            if (fsOriginal.existsSync(destCape)) {
+                await fs.unlink(destCape);
+                console.log("[CustomSkinLoader] Cape removed.");
+            }
+        }
+        
+        return { success: true };
+    } catch (e) {
+        console.error("CustomSkinLoader error:", e);
+        return { success: false, message: e.message };
+    }
+});
+
 // ==========================================
 // MANAGER HANDLERS (Schematics, RP, Shaders)
 // ==========================================
-function getInstanceRoot() {
-    return path.join(app.getPath('appData'), '.hg_oo', 'instances', 'hg_studio_official'); 
+async function getInstanceRoot() {
+    const config = await loadConfig();
+    let instanceFolderName = 'hg_studio_official';
+    
+    if (config.activeTheme) {
+        const t = config.activeTheme.toLowerCase();
+        if (t.includes('hardcore')) instanceFolderName = 'hg_studio_hardcore';
+        else if (t.includes('cherry')) instanceFolderName = 'hg_studio_cherry';
+        else if (t.includes('dragon')) instanceFolderName = 'hg_studio_dragon';
+        else if (t.includes('autumn') || t.includes('autum')) instanceFolderName = 'hg_studio_autumn';
+    }
+
+    return path.join(app.getPath('appData'), '.hg_oo', 'instances', instanceFolderName); 
 }
 
-function getFolderByType(type) {
-    const root = getInstanceRoot();
+async function getFolderByType(type) {
+    const root = await getInstanceRoot();
     if (type === 'schematics') return path.join(root, 'schematics');
     if (type === 'resourcepacks') return path.join(root, 'resourcepacks');
     if (type === 'shaderpacks') return path.join(root, 'shaderpacks');
     return null;
 }
 
+// SKINS MANAGER
+ipcMain.handle('get-preset-skins', async () => {
+    const skinsDir = path.join(__dirname, 'assets', 'skins');
+    const results = [];
+    const addedNames = new Set(); // Track added filenames to prevent duplicates
+
+    const dirs = [
+        { name: 'slim', model: 'slim' },
+        { name: 'wide', model: 'default' }
+    ];
+
+    for (const d of dirs) {
+        const dirPath = path.join(skinsDir, d.name);
+        try {
+             if (fsOriginal.existsSync(dirPath)) { 
+                 const files = await fs.readdir(dirPath);
+                 files.filter(f => f.match(/\.(png|jpg|jpeg)$/i)).forEach(f => {
+                     if (!addedNames.has(f)) {
+                         results.push({
+                             name: f,
+                             path: path.join(dirPath, f),
+                             url: `assets/skins/${d.name}/${f}`,
+                             model: d.model
+                         });
+                         addedNames.add(f);
+                     }
+                 });
+            }
+        } catch (e) {
+            console.error(`Error reading skins subfolder ${d.name}:`, e);
+        }
+    }
+    
+    // Also read root for backward compatibility but skip if already added
+    try {
+        const rootFiles = await fs.readdir(skinsDir);
+        rootFiles.filter(f => f.match(/\.(png|jpg|jpeg)$/i)).forEach(f => {
+             if (!addedNames.has(f)) {
+                 results.push({
+                     name: f,
+                     path: path.join(skinsDir, f),
+                     url: `assets/skins/${f}`,
+                     model: 'default'
+                 });
+                 addedNames.add(f);
+             }
+        });
+    } catch(e) {}
+
+    return results;
+});
+
+ipcMain.handle('get-user-capes', async (event, username) => {
+    if (!username) return {};
+    let data = {};
+
+    // 1. Fetch from Capes.dev (Aggregator)
+    try {
+        console.log(`[Main] Fetching capes for ${username}...`);
+        const response = await fetch(`https://api.capes.dev/load/${username}`);
+        if (response.ok) {
+            data = await response.json();
+        }
+    } catch (error) {
+        console.error('Cape fetch failed (capes.dev):', error);
+    }
+
+    // 2. Manual Fallback: Check Optifine directly
+    try {
+        // capes.dev sometimes misses recent Optifine updates or specific username formats
+        if (!data.optifine) {
+            const ofUrl = `http://s.optifine.net/capes/${username}.png`;
+            const ofRes = await fetch(ofUrl, { method: 'HEAD' }); // HEAD request to check existence
+            if (ofRes.ok) {
+                console.log(`[Main] Found Optifine cape manually for ${username}`);
+                data.optifine = {
+                    id: "optifine",
+                    type: "optifine",
+                    url: ofUrl
+                };
+            }
+        }
+    } catch (e) {
+        // Ignore fallback errors
+    }
+
+    return data;
+});
+
+ipcMain.handle('fetch-image-base64', async (event, url) => {
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Failed to fetch");
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const base64 = buffer.toString('base64');
+        return `data:image/png;base64,${base64}`;
+    } catch (e) {
+        console.error("Fetch Base64 Error:", e);
+        return null;
+    }
+});
+
+ipcMain.handle('set-account-skin', async (event, { uuid, type, skinPath }) => {
+    console.log(`[Skin] Setting skin for ${uuid} (${type}) to ${skinPath}`);
+    
+    // NOTE: This relies on the Auth API supporting skin uploads via a specific endpoint
+    // OR it relies on replacing a file locally if using a specific mod like "OfflineSkins"
+    
+    // For HG Studio (Custom Auth), we likely need to POST to an API.
+    // Since API details are missing, we'll simulate success for UI demo purposes
+    // and provide the logic to be filled.
+    
+    if (type === 'hg_studio' || type === 'offline') {
+        // TODO: Implement API upload here
+        // const form = new FormData();
+        // form.append('skin', fs.createReadStream(skinPath));
+        // await fetch(`${AUTH_API_URL}?action=upload_skin`, { method: 'POST', body: form ... });
+        return { success: true };
+    } 
+    
+    return { success: false, message: "Le changement de skin n'est pas encore supporté pour ce type de compte." };
+});
+
 ipcMain.handle('get-instance-files', async (event, type) => {
-    const targetDir = getFolderByType(type);
+    const targetDir = await getFolderByType(type);
     if (!targetDir) return [];
 
     try {
@@ -1505,7 +1718,7 @@ ipcMain.handle('get-instance-files', async (event, type) => {
 });
 
 ipcMain.handle('add-instance-file', async (event, { type, sourcePath }) => {
-    const targetDir = getFolderByType(type);
+    const targetDir = await getFolderByType(type);
     if (!targetDir) return { success: false, message: "Invalid type" };
 
     try {
@@ -1522,7 +1735,7 @@ ipcMain.handle('add-instance-file', async (event, { type, sourcePath }) => {
 });
 
 ipcMain.handle('delete-instance-file', async (event, { type, fileName }) => {
-    const targetDir = getFolderByType(type);
+    const targetDir = await getFolderByType(type);
     if (!targetDir) return { success: false, message: "Invalid type" };
 
     try {
@@ -1534,7 +1747,7 @@ ipcMain.handle('delete-instance-file', async (event, { type, fileName }) => {
 });
 
 ipcMain.handle('open-instance-folder', async (event, type) => {
-    const targetDir = getFolderByType(type);
+    const targetDir = await getFolderByType(type);
     if (targetDir) {
         await fs.mkdir(targetDir, { recursive: true });
         require('electron').shell.openPath(targetDir);

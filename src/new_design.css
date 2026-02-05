@@ -2161,7 +2161,418 @@ input:checked + .slider:before {
     animation: heartbeat 2s infinite;
 }
 .special-leane:hover {
-    background: rgba(255, 158, 187, 0.1) !important;
+    color: #ffdce9 !important;
+}
+
+/* =========================================
+   WARDROBE MODAL UI
+   ========================================= */
+.modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(5px);
+    z-index: 9000;
+    display: flex; justify-content: center; align-items: center;
+}
+
+.wardrobe-content {
+    width: 900px; height: 600px;
+    background: rgba(18, 18, 18, 0.95); /* Deep Dark, less glass, more solid like PJ */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    display: flex; flex-direction: column;
+    box-shadow: 0 0 100px rgba(0,0,0,0.8);
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(20px);
+}
+
+.wardrobe-header {
+    height: 70px;
+    background: transparent;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0 30px;
+}
+.wardrobe-header h2 {
+    font-weight: 600;
+    font-size: 20px;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.wardrobe-body {
+    flex: 1; 
+    display: flex; 
+    background: transparent;
+}
+
+/* LEFT: 3D PREVIEW */
+.wardrobe-preview-column {
+    flex: 0 0 350px; /* Fixed width */
+    background: rgba(0,0,0,0.2);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    position: relative;
+    border-right: 1px solid rgba(255,255,255,0.05);
+}
+
+#skin-canvas {
+    width: 100% !important; height: 100% !important;
+    outline: none;
+}
+
+.preview-controls {
+    position: absolute; bottom: 30px;
+    display: flex; gap: 15px;
+    background: rgba(0,0,0,0.6);
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+.preview-controls button {
+    background: transparent;
+    border: none;
+    color: #aaa;
+    width: 32px; height: 32px; border-radius: 50%;
+    cursor: pointer; transition: 0.2s;
+    font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+}
+.preview-controls button:hover { 
+    color: #fff;
+    background: rgba(255,255,255,0.1);
+}
+
+/* RIGHT: SELECTION GRID */
+.wardrobe-selection-column {
+    flex: 1;
+    display: flex; flex-direction: column;
+    padding: 0; 
+}
+
+.wardrobe-actions {
+    padding: 20px 30px;
+    background: transparent;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    display: flex; justify-content: space-between; align-items: center;
+}
+
+.wardrobe-actions button {
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.05);
+    color: #fff;
+    display: flex; align-items: center; gap: 8px;
+}
+.wardrobe-actions button:hover {
+    background: rgba(255,255,255,0.1);
+    transform: translateY(-2px);
+}
+#save-skin-btn {
+    background: var(--primary-pink); /* Launcher Theme Pink */
+    border-color: var(--primary-pink);
+    color: #fff;
+}
+#save-skin-btn:hover {
+    background: #ff5c8d; /* Lighter Pink */
+    box-shadow: 0 5px 15px rgba(255, 0, 85, 0.3);
+}
+
+.wardrobe-selection-column h3 {
+    padding: 20px 30px 10px;
+    font-size: 13px; 
+    color: #888; 
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.skin-grid {
+    flex: 1;
+    padding: 0 30px 30px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); /* Smaller, classic head size */
+    gap: 15px;
+    overflow-y: auto;
+}
+
+/* SKIN PRESET ITEM - HEAD FOCUS */
+.skin-preset-item {
+    aspect-ratio: 1;
+    background-color: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    position: relative;
+    transition: 0.2s;
+    image-rendering: pixelated;
+    
+    /* Show only the FACE/HEAD of the skin */
+    background-size: 800%; /* 64px width image -> 8px head width = 800% zoom */
+    background-position: 14% 14%; /* Position top-left where the head is */
+    
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+
+.skin-preset-item:hover { 
+    transform: translateY(-5px);
+    box-shadow: 0 8px 15px rgba(0,0,0,0.5);
+}
+
+/* Import Popup Styling */
+.import-content {
+    width: 600px; height: 450px;
+    background: #1a1b1d;
+    border-radius: 12px;
+    box-shadow: 0 50px 100px rgba(0,0,0,0.8);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    color: #eee;
+    font-family: 'Segoe UI', sans-serif;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.import-header {
+    padding: 15px 20px;
+    background: #202124;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.import-header h3 { margin: 0; font-size: 16px; font-weight: 600; }
+
+.import-body {
+    flex: 1; display: flex; padding: 20px; gap: 20px;
+}
+
+.import-preview {
+    flex: 1; 
+    background: #111; 
+    border-radius: 8px;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+}
+.drag-hint {
+    position: absolute; bottom: 10px; width: 100%; text-align: center;
+    font-size: 11px; color: #666; pointer-events: none;
+}
+
+.import-options {
+    flex: 1; display: flex; flex-direction: column; justify-content: center;
+}
+
+.option-group label {
+    display: block; font-size: 13px; color: #aaa; margin-bottom: 10px;
+}
+
+.import-footer {
+    margin-top: auto; display: flex; gap: 10px;
+}
+.import-footer button {
+    flex: 1; padding: 10px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer;
+}
+.secondary-btn { background: rgba(255,255,255,0.1); color: #fff; }
+.secondary-btn:hover { background: rgba(255,255,255,0.2); }
+.primary-btn { background: var(--primary-pink); color: #fff; }
+.primary-btn:hover { filter: brightness(1.1); }
+
+/* Wardrobe Grid Adjustments */
+#saved-skins-grid {
+    padding: 10px 30px;
+}
+.empty-hint {
+    font-size: 12px; color: #555; text-align: center; width: 100%; padding: 20px 0;
+}
+
+
+/* --- Skin Config Controls (PJ Style) --- */
+.skin-config-section {
+    padding: 0 30px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.skin-config-section h4 {
+    font-size: 12px; color: #888; text-transform: uppercase; margin-bottom: 10px; font-weight: 600;
+}
+
+.model-selector {
+    display: flex; gap: 10px;
+}
+
+.model-option {
+    flex: 1; position: relative; cursor: pointer;
+}
+.model-option input { position: absolute; opacity: 0; }
+
+.model-btn {
+    display: flex; align-items: center; justify-content: center;
+    padding: 10px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    color: #ccc; font-size: 13px; font-weight: 500;
+    transition: 0.2s;
+}
+
+.model-option input:checked + .model-btn {
+    background: rgba(255, 0, 85, 0.2); /* Theme Pink Tint */
+    border-color: var(--primary-pink);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(255, 0, 85, 0.2);
+}
+
+.model-option:hover .model-btn {
+    background: rgba(255,255,255,0.1);
+}
+
+/* Enhanced Account List for Settings */
+.account-card-row {
+    display: flex; align-items: center;
+    background: rgba(255,255,255,0.05);
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    transition: 0.2s;
+    border: 1px solid transparent;
+}
+.account-card-row.active-acc {
+    border-color: var(--primary-pink);
+    background: rgba(255, 0, 85, 0.05);
+}
+.account-card-row:hover { background: rgba(255,255,255,0.1); }
+
+.acc-row-avatar {
+    width: 40px; height: 40px; border-radius: 8px;
+    background-size: cover; margin-right: 15px;
+}
+.acc-row-info { flex: 1; }
+.acc-row-name { display: block; font-weight: 600; font-size: 14px; }
+.acc-row-type { font-size: 11px; opacity: 0.7; }
+.acc-row-actions { display: flex; gap: 8px; }
+
+.btn-skin-edit {
+    background: rgba(255,255,255,0.1);
+    color: #fff; border: none;
+    padding: 5px 10px; border-radius: 4px;
+    font-size: 11px; cursor: pointer;
+    transition: 0.2s;
+}
+.btn-skin-edit:hover { background: var(--primary-pink); }
+
+/* Edit Button Overlay for Saved Skins */
+.skin-item-edit-btn {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%); /* Always centered */
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease, background 0.2s;
+    z-index: 10;
+    font-size: 14px;
+    pointer-events: auto; /* Ensure clickable */
+}
+
+/* Ensure parent is relative */
+.skin-preset-item {
+    position: relative !important;
+}
+
+.skin-preset-item:hover .skin-item-edit-btn {
+    opacity: 1;
+}
+
+.skin-item-edit-btn:hover {
+    background: var(--primary-pink);
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+
+/* Cape Selector Styles */
+.cape-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+    gap: 10px;
+    padding: 10px;
+    max-height: 220px;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+    margin-top: 10px;
+}
+
+.cape-item {
+    width: 40px;
+    height: 64px; /* Render target size */
+    background-color: #222;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+    image-rendering: pixelated; 
+    transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+
+    /* --- THE MAGICAL CSS CROP --- */
+    /* 
+       Source Image: 64x32
+       We want to display slice: x=12, y=1, w=10, h=16
+       Target size: 40x64 (4x scale relative to crop)
+       
+       Calculation:
+       Scale = 40px / 10px = 4.
+       Virtual Size of full image = 64 * 4 = 256px wide, 32 * 4 = 128px tall.
+       Position X = -12 * 4 = -48px.
+       Position Y = -1 * 4 = -4px.
+    */
+    background-size: 256px 128px;
+    background-position: -48px -4px;
+    background-repeat: no-repeat;
+    
+    margin: 0 auto;
+}
+
+.cape-item:hover {
+    border-color: #fff;
+    transform: translateY(-4px) scale(1.05);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+    z-index: 5;
+}
+
+.cape-item.selected {
+    border-color: var(--primary-pink);
+    box-shadow: 0 0 15px var(--primary-pink);
+}
+
+.cape-item.none-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 0, 0, 0.1);
+    background-image: none !important;
+}
+.cape-item.none-option i {
+    font-size: 18px;
+    color: #ff5555;
+}
+
+.cape-item.selected {
+    border-color: var(--primary-pink);
+    box-shadow: 0 0 10px rgba(236, 15, 120, 0.4);
+}
+
+.cape-item.none-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    font-size: 20px;
 }
 
 @keyframes heartbeat {

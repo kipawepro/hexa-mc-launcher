@@ -15,7 +15,7 @@ contextBridge.exposeInMainWorld('api', {
     checkUpdate: () => ipcRenderer.invoke('check-update'),
     installUpdate: (url) => ipcRenderer.invoke('install-update', url),
     getSystemInfo: () => ipcRenderer.invoke('get-system-info'),
-    openFileDialog: () => ipcRenderer.invoke('open-file-dialog'),
+    openFileDialog: (filters) => ipcRenderer.invoke('open-file-dialog', filters),
     installJava: (version) => ipcRenderer.invoke('install-java', version),
     testJava: (path) => ipcRenderer.invoke('test-java', path),
     detectJava: (version) => ipcRenderer.invoke('detect-java', version),
@@ -29,5 +29,12 @@ contextBridge.exposeInMainWorld('api', {
     getInstanceFiles: (type) => ipcRenderer.invoke('get-instance-files', type),
     addInstanceFile: (data) => ipcRenderer.invoke('add-instance-file', data),
     deleteInstanceFile: (data) => ipcRenderer.invoke('delete-instance-file', data),
-    openInstanceFolder: (type) => ipcRenderer.invoke('open-instance-folder', type)
+    openInstanceFolder: (type) => ipcRenderer.invoke('open-instance-folder', type),
+
+    // Skins
+    getPresetSkins: () => ipcRenderer.invoke('get-preset-skins'),
+    setAccountSkin: (data) => ipcRenderer.invoke('set-account-skin', data),
+    getUserCapes: (username) => ipcRenderer.invoke('get-user-capes', username),
+    applyCustomSkin: (data) => ipcRenderer.invoke('apply-custom-skin-loader', data),
+    fetchImageBase64: (url) => ipcRenderer.invoke('fetch-image-base64', url)
 });

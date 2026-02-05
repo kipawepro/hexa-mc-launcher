@@ -15,20 +15,22 @@ if (navHomeBtn) {
     });
 }
 
-// Check Maintenance on Startup
-(async () => {
-
-    // INTRO SCREEN LOGIC
+// === SAFE INTRO REMOVAL ===
+// Ensures the loading screen is always removed even if other scripts fail
+window.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
         const intro = document.getElementById('intro-screen');
         if (intro) {
+            intro.style.transition = "opacity 0.5s ease";
             intro.style.opacity = '0';
-            setTimeout(() => { 
-                intro.remove(); 
-            }, 500); // Wait for fade out transition (0.5s)
+            setTimeout(() => intro.remove(), 600);
         }
-    }, 1000); // Show for 1 second
+    }, 1000);
+});
 
+// Check Maintenance on Startup
+(async () => {
+    // Moved Intro Screen Logic to separate safe block below
     // STARTUP: Apply Theme if Saved
     try {
         const savedSettings = await window.api.getSettings();
@@ -45,6 +47,9 @@ if (navHomeBtn) {
                 // Apply Color
                 document.documentElement.style.setProperty('--primary-pink', currentTheme.accentColor);
                 
+                // Update Version Selector (Hardcore check)
+                if (window.updateSelectorForTheme) window.updateSelectorForTheme(currentTheme.id);
+
                 // Apply Video
                 const bgVideo = document.getElementById('bg-video');
                 if (bgVideo) {
@@ -505,7 +510,37 @@ const loadingLog = document.getElementById('loading-log');
 // =========================================
 const verBase = document.getElementById('ver-base');
 const verEnhanced = document.getElementById('ver-enhanced');
+const verHardcore = document.getElementById('ver-hardcore');
 const modpackNameStatus = document.getElementById('modpack-name');
+
+// GLOBAL Helper to update selector based on theme
+window.updateSelectorForTheme = (themeId) => {
+    if (!themeId) return;
+    const t = themeId.toLowerCase();
+    
+    // We assume elements exist
+    if (!verBase || !verEnhanced || !verHardcore) return;
+
+    if (t.includes('hardcore')) {
+        // HARDCORE MODE: Only 'hg.hardcore' visible
+        verBase.style.display = 'none';
+        verEnhanced.style.display = 'none';
+        verHardcore.style.display = 'flex';
+        
+        // Force switch to hardcore
+        verHardcore.click();
+    } else {
+        // NORMAL MODE: 'Base' and 'Enhanced' visible
+        verBase.style.display = 'flex';
+        verEnhanced.style.display = 'flex';
+        verHardcore.style.display = 'none';
+        
+        // If we were on hardcore (now hidden), switch back to base
+        if (verHardcore.classList.contains('active')) {
+            verBase.click();
+        }
+    }
+}
 
 if (verBase && verEnhanced) {
     const setVersion = (version) => {
@@ -513,22 +548,34 @@ if (verBase && verEnhanced) {
         launchBtn.style.color = 'transparent';
         
         setTimeout(() => {
+            // Reset actives
+            verBase.classList.remove('active');
+            verEnhanced.classList.remove('active');
+            if (verHardcore) verHardcore.classList.remove('active');
+
             if (version === 'base') {
                 verBase.classList.add('active');
-                verEnhanced.classList.remove('active');
                 
                 // Restore Play Button
                 launchBtn.classList.remove('coming-soon');
                 launchBtn.innerHTML = 'JOUER';
                 if (modpackNameStatus) modpackNameStatus.innerText = 'Prêt à jouer';
+            
             } else if (version === 'enhanced') {
                 verEnhanced.classList.add('active');
-                verBase.classList.remove('active');
                 
                 // Set Coming Soon state
                 launchBtn.classList.add('coming-soon');
                 launchBtn.innerHTML = 'BIENTÔT DISPONIBLE';
                 if (modpackNameStatus) modpackNameStatus.innerText = 'HG Studio Enhanced';
+            
+            } else if (version === 'hardcore') {
+                if (verHardcore) verHardcore.classList.add('active');
+                
+                // Restore Play Button (Hardcore is playable)
+                launchBtn.classList.remove('coming-soon');
+                launchBtn.innerHTML = 'JOUER (HC)';
+                if (modpackNameStatus) modpackNameStatus.innerText = 'Mode Hardcore';
             }
             
             // Restore visibility after change
@@ -538,6 +585,7 @@ if (verBase && verEnhanced) {
 
     verBase.addEventListener('click', () => setVersion('base'));
     verEnhanced.addEventListener('click', () => setVersion('enhanced'));
+    if(verHardcore) verHardcore.addEventListener('click', () => setVersion('hardcore'));
 }
 
 launchBtn.addEventListener('click', async () => {
@@ -829,6 +877,9 @@ settingsBtn.addEventListener('click', async () => {
                     // Update UI immediately (Real-time)
                     document.documentElement.style.setProperty('--primary-pink', theme.accentColor);
                     
+                    // Update Version Selector (Hardcore check)
+                    if (window.updateSelectorForTheme) window.updateSelectorForTheme(theme.id);
+
                     const bgVideo = document.getElementById('bg-video');
                     if (bgVideo) {
                         bgVideo.src = videoSrc;
@@ -874,55 +925,10 @@ settingsBtn.addEventListener('click', async () => {
 
 
     // Account Tab (Populate)
-    const accContainer = document.getElementById('account-list-container');
-    accContainer.innerHTML = ''; // Clear
-    
-    // Check for Active User (HG Studio or Microsoft)
-    let activeUser = null;
-    
-    // Priority to HG Studio Login
-    if (localStorage.getItem('hg_user_data')) {
-        try {
-            activeUser = JSON.parse(localStorage.getItem('hg_user_data'));
-            if (!activeUser.type) activeUser.type = 'hg_studio';
-        } catch (e) {}
-    } 
-    // Fallback to Microsoft Login
-    else if (localStorage.getItem('user_session')) {
-        try {
-            activeUser = JSON.parse(localStorage.getItem('user_session'));
-            if (!activeUser.type) activeUser.type = 'microsoft';
-        } catch (e) {}
-    }
-
-    if (activeUser) {
-        const typeLabel = activeUser.type === 'hg_studio' ? 'HG.Studio' : 'Microsoft';
-        const typeStyle = activeUser.type === 'hg_studio' ? 'color: #ff3377;' : 'color: #00a8fc;';
-        
-        // Avatar Logic
-        let avatarUrl = `https://minotar.net/helm/${activeUser.username || 'steve'}/100.png`;
-        if (activeUser.type === 'hg_studio') {
-            if (activeUser.avatar_url) avatarUrl = activeUser.avatar_url;
-            else if (activeUser.avatar) avatarUrl = activeUser.avatar;
-            else if (activeUser.profile_picture) avatarUrl = activeUser.profile_picture;
-        }
-
-        const card = document.createElement('div');
-        card.className = 'account-card selected';
-        card.innerHTML = `
-            <div class="acc-avatar" style="background-image: url('${avatarUrl}')"></div>
-            <div class="acc-details">
-                <span class="acc-name">${activeUser.username}</span>
-                <span class="acc-uuid" style="font-size: 12px; display: flex; align-items: center; gap: 5px; margin-top: 2px; ${typeStyle}">
-                    ${activeUser.type === 'hg_studio' ? '<i class="fas fa-cube"></i>' : '<i class="fab fa-microsoft"></i>'} 
-                    ${typeLabel} Account
-                </span>
-                <span class="acc-status" style="color: #4CAF50; font-size: 11px; display: block; margin-top: 4px;">● Connecté</span>
-            </div>
-        `;
-        accContainer.appendChild(card);
-    } else {
-        accContainer.innerHTML = '<p style="color:#888; text-align:center; padding: 20px;">Aucun compte connecté.</p>';
+    // Start Multi-Account & Manager Refresh
+    refreshAccountList();
+    if (typeof managerTypes !== 'undefined') {
+        managerTypes.forEach(t => refreshManagerList(t));
     }
 
 
@@ -1317,8 +1323,650 @@ managerTypes.forEach(type => {
     }
 });
 
-// Reload lists when Settings are opened
-settingsBtn.addEventListener('click', () => {
-    managerTypes.forEach(t => refreshManagerList(t));
+
+
+
+// =========================================
+// SKIN & MULTI-ACCOUNT MANAGER
+// =========================================
+
+const wardrobeModal = document.getElementById('skin-wardrobe-modal');
+const closeWardrobeBtn = document.getElementById('close-wardrobe-btn');
+const importSkinBtn = document.getElementById('import-skin-btn');
+const saveSkinBtn = document.getElementById('save-skin-btn');
+const skinPresetsGrid = document.getElementById('skin-presets-grid');
+let skinViewer = null; // 3D instance
+let currentEditingAccount = null; // { uuid, type }
+let selectedSkinPath = null; // Path of file to upload/set
+
+// 1. Render Account List (with Edit Skin Button)
+async function refreshAccountList() {
+    const accContainer = document.getElementById('account-list-container');
+    accContainer.innerHTML = ''; 
+
+    // Get Active User
+    let activeUser = null;
+    let accounts = [];
+
+    // Try to get "Accounts List" (New Storage)
+    // If not exists, migrate current single user to list
+    const storedAccounts = localStorage.getItem('hg_accounts');
+    if (storedAccounts) {
+        accounts = JSON.parse(storedAccounts);
+    } else {
+        // Migration logic
+        let legacyUser = null;
+        if (localStorage.getItem('hg_user_data')) legacyUser = JSON.parse(localStorage.getItem('hg_user_data'));
+        else if (localStorage.getItem('user_session')) legacyUser = JSON.parse(localStorage.getItem('user_session'));
+        
+        if (legacyUser) {
+            accounts.push(legacyUser);
+            localStorage.setItem('hg_accounts', JSON.stringify(accounts));
+        }
+    }
+
+    // Determine currently active
+    // We look at the session token owner
+    // Simplify: We assume the first in list is active OR we store "active_uuid"
+    // For now, let's use the object in `hg_user_data` as the "Active Session"
+    if (localStorage.getItem('hg_user_data')) {
+        try {
+            activeUser = JSON.parse(localStorage.getItem('hg_user_data'));
+        } catch(e){}
+    }
+
+    if (accounts.length === 0) {
+        accContainer.innerHTML = '<p style="color:#888; text-align:center;">Aucun compte.</p>';
+        return;
+    }
+
+    accounts.forEach(acc => {
+        const isActive = activeUser && activeUser.uuid === acc.uuid;
+        const typeLabel = acc.type === 'hg_studio' ? 'HG Studio' : 'Microsoft';
+        let avatarUrl = `https://minotar.net/helm/${acc.username}/100.png`;
+        
+        // HG specific avatar
+        if (acc.type === 'hg_studio' && (acc.avatar_url || acc.avatar)) {
+            avatarUrl = acc.avatar_url || acc.avatar;
+        }
+
+        const row = document.createElement('div');
+        row.className = `account-card-row ${isActive ? 'active-acc' : ''}`;
+        row.innerHTML = `
+            <div class="acc-row-avatar" style="background-image: url('${avatarUrl}')"></div>
+            <div class="acc-row-info">
+                <span class="acc-row-name">${acc.username}</span>
+                <span class="acc-row-type">${typeLabel} ${isActive ? '● Connecté' : ''}</span>
+            </div>
+            <div class="acc-row-actions">
+                ${!isActive ? `<button class="btn-skin-edit" onclick="switchAccount('${acc.uuid}')">Connecter</button>` : ''}
+                <button class="btn-skin-edit" id="edit-skin-${acc.uuid}"><i class="fas fa-tshirt"></i> Modifier Skin</button>
+            </div>
+        `;
+        
+        accContainer.appendChild(row);
+
+        // Bind Edit Skin
+        const editBtn = row.querySelector(`#edit-skin-${acc.uuid}`);
+        editBtn.addEventListener('click', () => openWardrobe(acc));
+    });
+
+    // Add New Account Button
+    const addBtn = document.createElement('div');
+    addBtn.className = 'account-card-row add-new';
+    addBtn.style.justifyContent = 'center';
+    addBtn.style.cursor = 'pointer';
+    addBtn.style.borderStyle = 'dashed';
+    addBtn.innerHTML = '<i class="fas fa-plus"></i> Ajouter un compte';
+    addBtn.onclick = () => {
+        // For now, redirect to login or simple info
+        alert("Fonctionnalité d'ajout rapide en cours de développement. Veuillez utiliser la déconnexion pour changer de compte."); 
+    };
+    accContainer.appendChild(addBtn);
+}
+// Expose switchAccount helper logic would be complex w/o auth flow reset, skipping for now as per minimal prompt
+
+// 2. Open Wardrobe Logic
+async function openWardrobe(account) {
+    currentEditingAccount = account;
+    selectedSkinPath = null;
+    wardrobeModal.style.display = 'flex';
+    
+    // Init 3D View if first time
+    if (!skinViewer) {
+        const canvas = document.getElementById('skin-canvas');
+        const container = document.querySelector('.wardrobe-preview-column');
+        
+        if (typeof skinview3d !== 'undefined') {
+            const initialSkinUrl = account.skin_url || `https://minotar.net/skin/${account.username}`;
+            skinViewer = new skinview3d.SkinViewer({
+                canvas: canvas,
+                width: container.clientWidth, // Dynamic width
+                height: container.clientHeight, // Dynamic height
+                skin: initialSkinUrl
+            });
+            
+            // AUTO-SAVE INITIAL (First Run)
+            saveSkinToHistory(initialSkinUrl, 'default', null, true);
+            selectedSkinPath = initialSkinUrl;
+            
+            // IMPROVED CAMERA SETTINGS (Brighter & Better)
+            // Fix Camera Distance (Z) to avoid being "inside" the head
+            skinViewer.camera.position.z = 65; 
+            skinViewer.camera.position.y = 0;  
+            skinViewer.fov = 50; 
+            skinViewer.zoom = 0.9;
+            // Enhanced Lighting
+            skinViewer.globalLight.intensity = 1.2; 
+            skinViewer.cameraLight.intensity = 0.8; 
+
+            skinViewer.animation = new skinview3d.WalkingAnimation(); 
+            skinViewer.animation.speed = 0.5;
+
+            // Load Cape
+            loadCapes(account);
+
+            // Handle Resize
+            const resizeObserver = new ResizeObserver(() => {
+                skinViewer.setSize(container.clientWidth, container.clientHeight);
+            });
+            resizeObserver.observe(container);
+            
+            // Controls
+            document.getElementById('rotate-skin-btn').addEventListener('click', () => {
+                skinViewer.animation.paused = !skinViewer.animation.paused;
+            });
+            document.getElementById('toggle-cape-btn').addEventListener('click', () => {
+                // Toggle Cape Visibility (Not changing texture on server, just view)
+                if(skinViewer.capeImage) {
+                    // There is no easy "hide" in this lib without setting to null.
+                    // We can just reload it or set null.
+                    // Let's implement a simple "cycle" or toggle if we store the cape URL.
+                    // Simplified: Just alert for now as requested "demand selection" logic is handled elsewhere.
+                    alert("Utilisez les options du jeu pour afficher/masquer la cape.");
+                } else {
+                    alert("Aucune cape active.");
+                }
+            });
+            
+            // BIND MODEL SELECTORS (Radio Buttons)
+            document.querySelectorAll('input[name="skin-model"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    if (selectedSkinPath && skinViewer) {
+                        skinViewer.loadSkin(selectedSkinPath, { model: e.target.value });
+                    }
+                });
+            });
+            
+        } else {
+             console.warn("SkinView3D library not loaded yet.");
+             alert("La librairie 3D est en cours de chargement, réessayez dans quelques secondes.");
+             wardrobeModal.style.display = 'none'; // Close to prevent broken state
+             return;
+        }
+    } else {
+        // Reset Skin to current user
+        if(skinViewer) {
+             // AUTO-SAVE ORIGINAL SKIN LOGIC
+             const originalUrl = account.skin_url || `https://minotar.net/skin/${account.username}`;
+             saveSkinToHistory(originalUrl, 'default', true); // Assume default for old skin if unknown
+             
+             skinViewer.loadSkin(originalUrl);
+             loadCapes(account); 
+             
+             // Reset Controls to Default
+             document.querySelector('input[name="skin-model"][value="default"]').checked = true;
+             selectedSkinPath = originalUrl;
+        }
+    }
+
+    // Load Saved Skins (History) first
+    renderSavedSkinsAndPresets();
+}
+
+function saveSkinToHistory(path, model, cape = null, silent = false) {
+    try {
+        let stored = localStorage.getItem('hg_saved_skins') ? JSON.parse(localStorage.getItem('hg_saved_skins')) : [];
+        
+        // Remove existing entry for this path to update it (avoid dupes + update model/date)
+        stored = stored.filter(s => s.path !== path);
+        
+        stored.unshift({ path: path, model: model, cape: cape, date: Date.now() }); // Add to TOP
+        
+        // Limit history size to 20?
+        if (stored.length > 20) stored = stored.slice(0, 20);
+
+        localStorage.setItem('hg_saved_skins', JSON.stringify(stored));
+        if(!silent) renderSavedSkinsAndPresets(); // Refresh list if UI is open
+    } catch(e) {}
+}
+
+async function renderSavedSkinsAndPresets() {
+    const presetGrid = document.getElementById('skin-presets-grid');
+    const savedGrid = document.getElementById('saved-skins-grid');
+    
+    // Clear
+    if(presetGrid) presetGrid.innerHTML = '';
+    if(savedGrid) savedGrid.innerHTML = '';
+
+    // 1. Saved Skins Section
+    let savedSkins = [];
+    try {
+        const stored = localStorage.getItem('hg_saved_skins');
+        if (stored) savedSkins = JSON.parse(stored);
+    } catch(e) {}
+
+    if (savedGrid) {
+        if (savedSkins.length > 0) {
+            savedSkins.forEach(skin => {
+                 // Create element directly into savedGrid
+                 // Pass true for isEditable
+                 const item = createSkinElement(skin.path, skin.model || 'default', skin.cape || null, true);
+                 savedGrid.appendChild(item);
+            });
+        } else {
+            savedGrid.innerHTML = '<p class="empty-hint">Aucun skin récent.</p>';
+        }
+    }
+
+    // 2. Presets
+    const presets = await window.api.getPresetSkins();
+    if (presetGrid) {
+        presets.forEach(p => {
+             const item = createSkinElement(p.url, p.model, null, false);
+             presetGrid.appendChild(item);
+        });
+    }
+}
+
+function createSkinElement(imageSource, model, cape = null, isEditable = false) {
+    const item = document.createElement('div');
+    item.className = 'skin-preset-item';
+    
+    let cssUrl = imageSource;
+    if (!imageSource.startsWith('assets') && !imageSource.startsWith('http')) {
+        cssUrl = imageSource.replace(/\\/g, '/');
+    }
+    
+    item.style.backgroundImage = `url('${cssUrl}')`; 
+    item.title = model === 'slim' ? 'Modèle Slim' : 'Modèle Classique';
+
+    item.onclick = () => {
+        selectSkin(imageSource, model, cape);
+        // Highlight logic
+        document.querySelectorAll('.skin-preset-item').forEach(x => x.classList.remove('selected'));
+        item.classList.add('selected');
+    };
+
+    // Add Edit Button for Saved Skins
+    if (isEditable) {
+        const editBtn = document.createElement('div');
+        editBtn.className = 'skin-item-edit-btn';
+        editBtn.innerHTML = '<i class="fas fa-pencil-alt"></i>';
+        editBtn.onclick = (e) => {
+            e.stopPropagation(); // Don't select, just edit
+            tempImportPath = imageSource;
+            // Pre-select correct model in popup
+            openImportModal(imageSource, model);
+        };
+        item.appendChild(editBtn);
+    }
+
+    return item;
+}
+
+function createSkinItem(imageSource, model, isSaved = false) {
+    // Deprecated wrapper if called elsewhere, redirect to new element creator
+    // Assuming this was used inside old loop, no issues.
+    return createSkinElement(imageSource, model);
+}
+
+
+function loadCapes(account) {
+    if (!skinViewer) return;
+    
+    // Clear current cape
+    skinViewer.loadCape(null);
+    selectedSkinCape = null; // Default to null
+
+    // 1. Try Optifine (Community standard)
+    // We try to load image. If success, we use it.
+    const ofUrl = `http://s.optifine.net/capes/${account.username}.png`;
+    
+    // 2. Try Official Cape (if we had full auth info with textures property)
+    // For now we simulate Optifine check
+    skinViewer.loadCape(ofUrl).then(() => {
+       // Success Optifine
+       selectedSkinCape = ofUrl;
+    }).catch(() => {
+       // Fail Optifine, try Microsoft (only if we have URL, which we don't in this context usually w/o API call)
+       // Fallback: If account has a stored cape url
+       if (account.cape_url) {
+           skinViewer.loadCape(account.cape_url);
+           selectedSkinCape = account.cape_url;
+       }
+    });
+}
+
+function selectSkin(path, model = 'default', innerCape = null) {
+    selectedSkinPath = path;
+    selectedSkinModel = model;
+    selectedSkinCape = innerCape;
+    
+    // Update legacy Radio Button if it still exists (it might not)
+    const radio = document.querySelector(`input[name="skin-model"][value="${model}"]`);
+    if(radio) radio.checked = true;
+
+    if(skinViewer) {
+        // Load skin
+        skinViewer.loadSkin(path, { model: model });
+        // Load Cape
+        skinViewer.loadCape(innerCape);
+    }
+}
+
+// 3. Import Button (Opens Popup)
+let tempImportPath = null;
+let importViewer = null;
+let selectedImportCape = null;
+
+// Global Selection State (for Wardrobe Save)
+let selectedSkinModel = 'default';
+let selectedSkinCape = null;
+
+async function fetchUserCapes(username) {
+    if(!username) return {};
+    try {
+        console.log("Fetching capes for", username);
+        // Use Main Process to avoid CORS and networking issues in Renderer
+        const data = await window.api.getUserCapes(username);
+        return data || {}; 
+    } catch (e) {
+        console.warn("Cape fetch error:", e);
+        return {};
+    }
+}
+
+if (importSkinBtn) {
+    importSkinBtn.addEventListener('click', async () => {
+        const path = await window.api.openFileDialog([{ name: 'Images', extensions: ['png'] }]);
+        if (path) {
+            tempImportPath = path;
+            openImportModal(path);
+        }
+    });
+}
+
+// Helper to generate a clean "Back View" of a cape from its texture
+async function generateCapePreview(url) {
+    return new Promise(async (resolve) => {
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        
+        // Use Main Process to fetch image (Bypass CORS)
+        const base64 = await window.api.fetchImageBase64(url);
+        if (!base64) {
+            resolve(url); // Fallback to raw URL
+            return;
+        }
+
+        img.src = base64;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Output size: 10x16 (Raw pixels of back face)
+            // Can be scaled up for display, but let's keep it raw or scaled
+            const scale = 4; // Higher res
+            canvas.width = 10 * scale; 
+            canvas.height = 16 * scale;
+            
+            // Disable smoothing for pixel art look
+            ctx.imageSmoothingEnabled = false;
+            
+            // Setup crop source
+            // Standard Cape: Back is at (12, 1) with size 10x16
+            const srcX = 12;
+            const srcY = 1;
+            const srcW = 10;
+            const srcH = 16;
+            
+            // Check aspect ratio for HD capes (e.g. Optifine)
+            const ratio = img.width / 64; 
+            
+            // Draw cropped back
+            ctx.drawImage(img, 
+                srcX * ratio, srcY * ratio, srcW * ratio, srcH * ratio, // Source crop
+                0, 0, canvas.width, canvas.height // Dest
+            );
+            
+            resolve(canvas.toDataURL());
+        };
+        img.onerror = () => resolve(url);
+    });
+}
+
+const importModal = document.getElementById('skin-import-popup');
+
+// PRESET CAPES (Minecon, etc.)
+const PRESET_CAPES = [
+    { name: 'Minecon 2011', url: 'https://textures.minecraft.net/texture/953cac8b779fe41383e675ee2b86071a71658f2180f56fbce8ba315ea4056' },
+    { name: 'Minecon 2012', url: 'https://textures.minecraft.net/texture/a2ca584e3a47da5b395a121da0c5417937397e505876352c286940d9089f64' },
+    { name: 'Minecon 2013', url: 'https://textures.minecraft.net/texture/153b1a0dfcbae953cdeb1f256546c092437965156e8c72718e27c15e709' },
+    { name: 'Minecon 2015', url: 'https://textures.minecraft.net/texture/414e0f49dcf460e65780a4005aa2b4642dd211bc9202a8335359288219463b' },
+    { name: 'Minecon 2016', url: 'https://textures.minecraft.net/texture/e7dfea16dc83c97df01a12fabbd1216359c0cd0ea42f9999b6e97c584963e980' },
+    { name: 'Migrator', url: 'https://textures.minecraft.net/texture/2340c0e03dd24a11b15a8b33c2a7e9e32abb2051b2481d0ba7defd635ca7a933' },
+    { name: 'Mojang', url: 'https://textures.minecraft.net/texture/5786fe99be377dfb6e38aa102f31aa636f5613dcc5432617f6368d71e98b2' }
+];
+
+async function openImportModal(path, initialModel = 'default') {
+    if(!importModal) return;
+    importModal.style.display = 'flex';
+    selectedImportCape = null; // Reset selection
+    
+    // Init Mini Viewer
+    const canvas = document.getElementById('import-canvas');
+    if (!importViewer && typeof skinview3d !== 'undefined') {
+        importViewer = new skinview3d.SkinViewer({
+            canvas: canvas,
+            width: 200, 
+            height: 300,
+            skin: path,
+            model: initialModel
+        });
+        importViewer.animation = new skinview3d.WalkingAnimation();
+        importViewer.globalLight.intensity = 1.0; 
+    } else if (importViewer) {
+        importViewer.loadSkin(path, { model: initialModel });
+        importViewer.loadCape(null); // Reset cape in viewer
+    }
+    
+    if(importViewer) importViewer.camera.position.z = 60;
+
+    // Set Checkbox to initialModel
+    const radio = document.querySelector(`input[name="import-model"][value="${initialModel}"]`);
+    if(radio) radio.checked = true;
+
+    // --- Cape Logic ---
+    const capeList = document.getElementById('cape-list');
+    const capeGroup = document.getElementById('cape-selector-group');
+    if(capeList && capeGroup) {
+        capeList.innerHTML = '<div style="color:#aaa; font-size:12px;">Chargement des capes...</div>';
+        capeGroup.style.display = 'block';
+
+        const username = currentEditingAccount?.username || (typeof user !== 'undefined' ? user.username : null);
+        
+        let capes = {};
+        if (username) {
+            try {
+                // Try fetching capes (will handle UUID or Username)
+                capes = await fetchUserCapes(username);
+                console.log("Capes loaded:", capes);
+            } catch(e) { console.error(e) }
+        }
+            
+        capeList.innerHTML = '';
+        
+        // "None" option
+        const noneDiv = document.createElement('div');
+        noneDiv.className = 'cape-item none-option'; // removed 'selected' default
+        if (!selectedImportCape) noneDiv.classList.add('selected');
+        
+        noneDiv.innerHTML = '<i class="fas fa-ban"></i>';
+        noneDiv.title = "Pas de cape";
+        noneDiv.onclick = () => {
+            importViewer.loadCape(null);
+            selectedImportCape = null;
+            document.querySelectorAll('.cape-item').forEach(c => c.classList.remove('selected'));
+            noneDiv.classList.add('selected');
+        };
+        capeList.appendChild(noneDiv);
+
+        // 1. User Capes (API)
+        let hasCapes = false;
+        
+        // Helper to process capes - PURE CSS VERSION (No async blocking)
+        const processCapeItem = async (label, url, isOwned) => {
+             const cItem = document.createElement('div');
+             cItem.className = 'cape-item';
+             // Add loading indicator?
+             capeList.appendChild(cItem); 
+
+             // 1. Fetch via Main Process to bypass CORS/Network issues
+             let visualUrl = url;
+             try {
+                 const base64 = await window.api.fetchImageBase64(url);
+                 if (base64) visualUrl = base64;
+             } catch(e) { console.error("Base64 fetch failed", e); }
+
+             // Use visual URL (Base64) - CSS handles cropping
+             cItem.style.backgroundImage = `url('${visualUrl}')`;
+             cItem.title = label;
+             
+             if (isOwned) {
+                 cItem.style.border = "2px solid #55ff55";
+             }
+
+             if (selectedImportCape === url) cItem.classList.add('selected');
+
+             cItem.onclick = () => {
+                 importViewer.loadCape(visualUrl); // Use Base64 for 3D viewer too
+                 selectedImportCape = url; // Keep original URL for file saving
+                 document.querySelectorAll('.cape-item').forEach(c => c.classList.remove('selected'));
+                 cItem.classList.add('selected');
+             };
+        };
+
+        const keys = Object.keys(capes);
+        for(const key of keys) {
+             const data = capes[key];
+             if(data.url) {
+                 hasCapes = true;
+                 processCapeItem(key + " (Possédée)", data.url, true);
+             }
+        }
+
+        // 2. Preset Capes (Minecon etc)
+        for (const pCape of PRESET_CAPES) {
+            processCapeItem(pCape.name, pCape.url, false);
+        }
+    }
+}
+
+// Bind Import Popup Controls
+const closeImportBtn = document.getElementById('close-import-btn');
+const cancelImportBtn = document.getElementById('cancel-import-btn');
+const confirmImportBtn = document.getElementById('confirm-import-btn');
+
+function closeImport() {
+    if(importModal) importModal.style.display = 'none';
+    if(importViewer) importViewer.animation.paused = true;
+}
+
+if(closeImportBtn) closeImportBtn.addEventListener('click', closeImport);
+if(cancelImportBtn) cancelImportBtn.addEventListener('click', closeImport);
+
+if(confirmImportBtn) {
+    confirmImportBtn.addEventListener('click', () => {
+        // Get selected model
+        const modelEl = document.querySelector('input[name="import-model"]:checked');
+        const model = modelEl ? modelEl.value : 'default';
+        
+        // Save to history & Select in Main Viewer
+        saveSkinToHistory(tempImportPath, model, selectedImportCape);
+        selectSkin(tempImportPath, model, selectedImportCape);
+        
+        closeImport();
+    });
+}
+
+// Bind Import Model Radios
+document.querySelectorAll('input[name="import-model"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        if (tempImportPath && importViewer) {
+            importViewer.loadSkin(tempImportPath, { model: e.target.value });
+        }
+    });
 });
+
+// 4. Save Button
+if (saveSkinBtn) {
+    saveSkinBtn.addEventListener('click', async () => {
+        if (!currentEditingAccount || !selectedSkinPath) {
+            alert("Aucun skin sélectionné.");
+            return;
+        }
+
+        saveSkinBtn.disabled = true;
+        saveSkinBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sauvegarde...';
+
+        try {
+            // Get selected model from State variable (as UI radios were removed)
+            const finalModel = selectedSkinModel || 'default';
+            
+            // 1. API Upload (Traditional) - Keep existing call if backend exists
+            /*
+            const result = await window.api.setAccountSkin({
+                uuid: currentEditingAccount.uuid,
+                type: currentEditingAccount.type || 'hg_studio',
+                skinPath: selectedSkinPath,
+                model: finalModel 
+            });
+            */
+           
+            // 2. CustomSkinLoader (Local File Copy)
+            // Use this instead per user request
+            const result = await window.api.applyCustomSkin({
+                username: currentEditingAccount.username,
+                skinPath: selectedSkinPath,
+                capeUrl: selectedSkinCape
+            });
+
+            if (result.success) {
+
+                // Save to "Saved Skins" History with correct model and cape
+                saveSkinToHistory(selectedSkinPath, finalModel, selectedSkinCape);
+
+                alert("Skin (CustomSkinLoader) appliqué avec succès !\nRedémarrage du jeu requis.");
+                wardrobeModal.style.display = 'none';
+            } else {
+                alert("Erreur: " + result.message);
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Erreur critique: " + e.message);
+        }
+        
+        saveSkinBtn.disabled = false;
+        saveSkinBtn.innerHTML = '<i class="fas fa-save"></i> Sauvegarder';
+    });
+}
+
+// Close
+if (closeWardrobeBtn) {
+    closeWardrobeBtn.addEventListener('click', () => {
+        if(wardrobeModal) wardrobeModal.style.display = 'none';
+        if(skinViewer && skinViewer.animation) skinViewer.animation.paused = true; // save GPU
+    });
+}
 

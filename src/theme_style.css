@@ -6,7 +6,7 @@
     width: 100%;
     overflow-x: auto;
     white-space: nowrap;
-    padding-bottom: 10px; /* Space for scrollbar */
+    padding: 10px 5px 15px 5px; /* Added padding top/sides to prevent hover clipping */
 }
 
 /* Custom horizontal scrollbar */
