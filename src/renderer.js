@@ -1426,105 +1426,19 @@ async function refreshAccountList() {
 }
 // Expose switchAccount helper logic would be complex w/o auth flow reset, skipping for now as per minimal prompt
 
-// 2. Open Wardrobe Logic
+// 2. Open Wardrobe Logic - REDIRECT TO SITE
 async function openWardrobe(account) {
-    currentEditingAccount = account;
-    selectedSkinPath = null;
-    wardrobeModal.style.display = 'flex';
-    
-    // Init 3D View if first time
-    if (!skinViewer) {
-        const canvas = document.getElementById('skin-canvas');
-        const container = document.querySelector('.wardrobe-preview-column');
-        
-        if (typeof skinview3d !== 'undefined') {
-            const initialSkinUrl = account.skin_url || `https://minotar.net/skin/${account.username}`;
-            skinViewer = new skinview3d.SkinViewer({
-                canvas: canvas,
-                width: container.clientWidth, // Dynamic width
-                height: container.clientHeight, // Dynamic height
-                skin: initialSkinUrl
-            });
-            
-            // AUTO-SAVE INITIAL (First Run)
-            saveSkinToHistory(initialSkinUrl, 'default', null, true);
-            selectedSkinPath = initialSkinUrl;
-            
-            // IMPROVED CAMERA SETTINGS (Brighter & Better)
-            // Fix Camera Distance (Z) to avoid being "inside" the head
-            skinViewer.camera.position.z = 65; 
-            skinViewer.camera.position.y = 0;  
-            skinViewer.fov = 50; 
-            skinViewer.zoom = 0.9;
-            // Enhanced Lighting
-            skinViewer.globalLight.intensity = 1.2; 
-            skinViewer.cameraLight.intensity = 0.8; 
-
-            skinViewer.animation = new skinview3d.WalkingAnimation(); 
-            skinViewer.animation.speed = 0.5;
-
-            // Load Cape
-            loadCapes(account);
-
-            // Handle Resize
-            const resizeObserver = new ResizeObserver(() => {
-                skinViewer.setSize(container.clientWidth, container.clientHeight);
-            });
-            resizeObserver.observe(container);
-            
-            // Controls
-            document.getElementById('rotate-skin-btn').addEventListener('click', () => {
-                skinViewer.animation.paused = !skinViewer.animation.paused;
-            });
-            document.getElementById('toggle-cape-btn').addEventListener('click', () => {
-                // Toggle Cape Visibility (Not changing texture on server, just view)
-                if(skinViewer.capeImage) {
-                    // There is no easy "hide" in this lib without setting to null.
-                    // We can just reload it or set null.
-                    // Let's implement a simple "cycle" or toggle if we store the cape URL.
-                    // Simplified: Just alert for now as requested "demand selection" logic is handled elsewhere.
-                    alert("Utilisez les options du jeu pour afficher/masquer la cape.");
-                } else {
-                    alert("Aucune cape active.");
-                }
-            });
-            
-            // BIND MODEL SELECTORS (Radio Buttons)
-            document.querySelectorAll('input[name="skin-model"]').forEach(radio => {
-                radio.addEventListener('change', (e) => {
-                    if (selectedSkinPath && skinViewer) {
-                        skinViewer.loadSkin(selectedSkinPath, { model: e.target.value });
-                    }
-                });
-            });
-            
-        } else {
-             console.warn("SkinView3D library not loaded yet.");
-             alert("La librairie 3D est en cours de chargement, réessayez dans quelques secondes.");
-             wardrobeModal.style.display = 'none'; // Close to prevent broken state
-             return;
-        }
-    } else {
-        // Reset Skin to current user
-        if(skinViewer) {
-             // AUTO-SAVE ORIGINAL SKIN LOGIC
-             const originalUrl = account.skin_url || `https://minotar.net/skin/${account.username}`;
-             saveSkinToHistory(originalUrl, 'default', true); // Assume default for old skin if unknown
-             
-             skinViewer.loadSkin(originalUrl);
-             loadCapes(account); 
-             
-             // Reset Controls to Default
-             document.querySelector('input[name="skin-model"][value="default"]').checked = true;
-             selectedSkinPath = originalUrl;
-        }
-    }
-
-    // Load Saved Skins (History) first
-    renderSavedSkinsAndPresets();
+    // Redirect to the website for skin management via CustomSkinLoader API logic
+    // TODO: Change this URL to your actual website profile/skin page
+    const url = "https://votre-site.com/profil"; 
+    window.api.openExternal(url);
 }
 
-function saveSkinToHistory(path, model, cape = null, silent = false) {
+/* 
+   Old Wardrobe Logic Removed as requested.
+   Functionality moved to Web.
+*/
+function unused_saveSkinToHistory(path, model, cape = null, silent = false) {
     try {
         let stored = localStorage.getItem('hg_saved_skins') ? JSON.parse(localStorage.getItem('hg_saved_skins')) : [];
         
