@@ -6,29 +6,22 @@
     <title>hg.studio minecraft</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="new_design.css">
-    <link rel="stylesheet" href="pj_style.css"> <!-- New PJ Styles -->
-    <link rel="stylesheet" href="theme_style.css"> <!-- Theme Carousel -->
-    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="pj_style.css">
+    <link rel="stylesheet" href="theme_style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <!-- Intro Screen -->
     <div id="intro-screen">
         <img src="assets/logo.svg" alt="HG" class="intro-logo">
     </div>
-
     <div class="app-border">
-        <!-- Background Video -->
         <div class="video-background">
            <video autoplay muted loop id="bg-video" poster="assets/background.jpg">
                 <source src="assets/cinematic.mp4" type="video/mp4">
            </video>
         </div>
         <div class="video-overlay"></div>
-
-        <!-- New Header Navigation (Minecraft Style) -->
         <header class="main-header">
-            <!-- Left: User Profile Button -->
             <div class="user-profile-btn" id="profile-trigger">
                 <div class="header-avatar" id="user-avatar-header"></div>
                 <div class="user-info-col">
@@ -37,17 +30,11 @@
                 </div>
                 <i class="fas fa-chevron-down profile-arrow"></i>
             </div>
-
-            <!-- Center: Notch (Restored) -->
             <div class="iphone-notch">
                 <div class="notch-content">HG.STUDIO</div>
             </div>
-
-            <!-- Right: Window Controls (Auto-Hide) - MOVED OUTSIDE FOR Z-INDEX -->
         </header>
-
         <div class="container">
-            <!-- Maintenance Screen -->
             <div id="maintenance-screen" class="maintenance-container" style="display: none;">
                 <div class="maintenance-content">
                     <div class="maintenance-icon">
@@ -66,24 +53,19 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Login Screen -->
             <div id="login-screen" class="login-container">
                 <div class="login-box-new">
                     <img src="assets/logo.svg" class="login-logo" alt="Logo">
                     <div class="login-title">CONNEXION</div>
                     <div class="login-subtitle">Connectez-vous pour jouer</div>
-                    
                     <div class="input-group">
                         <input type="text" id="login-user" placeholder="Email ou Pseudo">
                         <i class="fas fa-user input-icon"></i>
                     </div>
-                    
                     <div class="input-group">
                         <input type="password" id="login-pass" placeholder="Mot de passe">
                         <i class="fas fa-lock input-icon"></i>
                     </div>
-
                     <div class="login-checkbox-container">
                         <label class="switch small">
                             <input type="checkbox" id="stay-connected" checked>
@@ -91,22 +73,16 @@
                         </label>
                         <span class="checkbox-label small">Rester connecté</span>
                     </div>
-
                     <button id="login-btn" class="login-btn-new">SE CONNECTER</button>
-                    
                     <div class="divider-new">
                         <span>OU</span>
                     </div>
-                    
                     <button id="microsoft-login-btn" class="microsoft-btn-new">
                         <i class="fab fa-microsoft"></i> Compte Microsoft
                     </button>
-
                     <p id="login-error" class="error-msg"></p>
                 </div>
             </div>
-
-            <!-- Loading Overlay -->
             <div id="loading-overlay" class="loading-overlay" style="display: none;">
                 <div class="pig-container">
                     <div class="pig-face">
@@ -115,24 +91,16 @@
                 </div>
                 <div class="loading-log" id="loading-log">Initializing...</div>
             </div>
-
-            <!-- Dashboard Screen (Redesigned) -->
             <div id="dashboard-screen" class="new-dashboard" style="display: none;">
-                
-                <!-- Bottom Action Area -->
                 <div class="bottom-action-bar">
-                    <!-- Left: Socials -->
                     <div class="social-group">
                         <button id="btn-map" class="social-btn" title="LiveMap"><i class="fas fa-map"></i></button>
                         <button id="btn-discord" class="social-btn" title="Discord"><i class="fab fa-discord"></i></button>
                         <button id="btn-instagram" class="social-btn" title="Instagram"><i class="fab fa-instagram"></i></button>
                         <button id="btn-tiktok" class="social-btn" title="TikTok"><i class="fab fa-tiktok"></i></button>
                         <button class="social-btn" title="Website"><i class="fas fa-globe"></i></button>
-                        <!-- LEANE SPECIAL BTN -->
                         <button id="btn-leane" class="social-btn special-leane" title="Pour toi" style="display: none;"><i class="fas fa-heart"></i></button>
                     </div>
-
-                    <!-- Center: PLAY Button -->
                     <div class="center-column">
                         <div class="version-selector-container">
                             <div class="version-selector">
@@ -149,7 +117,6 @@
                                 <div class="selector-highlight"></div>
                             </div>
                         </div>
-
                         <div class="play-button-container">
                             <button id="launch-btn" class="big-play-btn">
                                 JOUER
@@ -157,14 +124,10 @@
                             <div class="play-status" id="modpack-name">Prêt à jouer</div>
                         </div>
                     </div>
-
-                    <!-- Right: Settings -->
                     <div class="settings-group">
                          <button id="settings-btn" class="settings-icon-btn" title="Paramètres"><i class="fas fa-cog"></i></button>
                     </div>
                 </div>
-
-                <!-- Profile Dropdown (Moved here for context) -->
                 <div class="profile-dropdown" id="profile-dropdown">
                     <div class="dropdown-item" id="dropdown-settings">
                         <i class="fas fa-cog"></i> Paramètres
@@ -173,18 +136,13 @@
                         <i class="fas fa-sign-out-alt"></i> Déconnexion
                     </div>
                 </div>
-
             </div>
-
-            <!-- Settings Screen (Redesigned - Helios Style) -->
             <div id="settings-screen" class="settings-page" style="display: none;">
                 <div class="settings-layout">
-                    <!-- Left Sidebar -->
                     <div class="settings-sidebar">
                         <div class="settings-header">
                             <h2 class="settings-main-title">Paramètres</h2>
                         </div>
-                        
                         <nav class="settings-nav-menu">
                             <div class="nav-item active" data-tab="account">
                                 <span class="nav-label">Compte</span>
@@ -202,40 +160,29 @@
                                 <span class="nav-label">Mise à jour</span>
                             </div>
                         </nav>
-
                         <div class="settings-sidebar-footer">
                             <button id="close-settings-btn" class="done-btn">Terminé</button>
                         </div>
                     </div>
-
-                    <!-- Content Area -->
                     <div class="settings-content">
-                        
-                        <!-- TAB: Account -->
                         <div id="tab-account" class="tab-content active">
                             <div class="tab-header">
                                 <h2>Paramètres de Compte</h2>
                                 <p>Gérez vos comptes connectés.</p>
                             </div>
-
                             <div class="account-section">
                                 <div class="account-type-header">
                                     <div class="account-icon-ms"><i class="fas fa-users"></i> Comptes</div>
-                                    <!-- Add button removed as requested -->
                                 </div>
                                 <div class="account-list" id="account-list-container">
-                                    <!-- Accounts injected by JS -->
                                 </div>
                             </div>
                         </div>
-
-                        <!-- TAB: Minecraft -->
                         <div id="tab-minecraft" class="tab-content">
                             <div class="tab-header">
                                 <h2>Paramètres du Jeu</h2>
                                 <p>Options de lancement du jeu.</p>
                             </div>
-
                             <div class="setting-item">
                                 <label>Résolution du Jeu</label>
                                 <div class="resolution-inputs">
@@ -244,7 +191,6 @@
                                     <input type="number" id="game-height" class="res-input" value="720">
                                 </div>
                             </div>
-
                             <div class="setting-item toggle-row">
                                 <label for="s-fullscreen">Lancer en plein écran.</label>
                                 <label class="switch">
@@ -252,7 +198,6 @@
                                     <span class="slider round"></span>
                                 </label>
                             </div>
-
                             <div class="setting-item toggle-row">
                                 <label for="s-autoconnect">Connexion auto au serveur.</label>
                                 <label class="switch">
@@ -260,7 +205,6 @@
                                     <span class="slider round"></span>
                                 </label>
                             </div>
-
                             <div class="setting-item toggle-row">
                                 <div class="setting-text">
                                     <label for="s-detached">Fermer le launcher au lancement.</label>
@@ -271,8 +215,6 @@
                                     <span class="slider round"></span>
                                 </label>
                             </div>
-                            
-                            <!-- RESOURCE PACKS -->
                             <div class="manager-section">
                                 <div class="manager-header">
                                     <h3>Resource Packs</h3>
@@ -285,8 +227,6 @@
                                 </div>
                                 <div class="file-list" id="list-resourcepacks"></div>
                             </div>
-
-                            <!-- SHADERS -->
                             <div class="manager-section">
                                 <div class="manager-header">
                                     <h3>Shaders</h3>
@@ -299,8 +239,6 @@
                                 </div>
                                 <div class="file-list" id="list-shaderpacks"></div>
                             </div>
-
-                            <!-- SCHEMATICS -->
                             <div class="manager-section">
                                 <div class="manager-header">
                                     <h3>Schematics</h3>
@@ -314,14 +252,11 @@
                                 <div class="file-list" id="list-schematics"></div>
                             </div>
                         </div>
-
-                        <!-- TAB: Java -->
                         <div id="tab-java" class="tab-content">
                             <div class="tab-header">
                                 <h2>Paramètres Java</h2>
                                 <p>Configuration Java et mémoire.</p>
                             </div>
-
                             <div class="setting-item">
                                 <div class="ram-header" style="margin-bottom: 5px;">
                                     <label>Allocation Mémoire <span style="color: #aaa; font-weight: normal; font-size: 0.9em;">(Recommandé: 6144 MB)</span></label>
@@ -335,13 +270,9 @@
                                     <span>Total : <span id="sys-ram-total">--</span> GB</span>
                                 </div>
                             </div>
-                            
                             <hr style="border:0; border-top:1px solid rgba(255,255,255,0.05); margin: 20px 0;">
-
                             <div class="setting-item">
                                 <label style="margin-bottom: 15px; display:block;">Versions Java</label>
-                                
-                                <!-- Java 21 Card -->
                                 <div class="java-version-card">
                                     <div class="java-card-header">
                                         <span>Java 21 location</span>
@@ -354,8 +285,6 @@
                                         <button id="btn-test-21" class="java-action-btn btn-secondary" data-target="java-path-21"><i class="fas fa-play"></i> Test</button>
                                     </div>
                                 </div>
-
-                                <!-- Java 17 Card -->
                                 <div class="java-version-card">
                                     <div class="java-card-header">
                                         <span>Java 17 location (Recommandé 1.20.1)</span>
@@ -368,8 +297,6 @@
                                         <button id="btn-test-17" class="java-action-btn btn-secondary" data-target="java-path-17"><i class="fas fa-play"></i> Test</button>
                                     </div>
                                 </div>
-
-                                <!-- Java 8 Card -->
                                 <div class="java-version-card">
                                     <div class="java-card-header">
                                         <span>Java 8 location</span>
@@ -382,9 +309,7 @@
                                         <button id="btn-test-8" class="java-action-btn btn-secondary" data-target="java-path-8"><i class="fas fa-play"></i> Test</button>
                                     </div>
                                 </div>
-
                             </div>
-
                             <div class="setting-item">
                                 <label>Arguments JVM</label>
                                 <div class="input-container">
@@ -392,23 +317,17 @@
                                 </div>
                             </div>
                         </div>
-
-                        <!-- TAB: Launcher -->
                         <div id="tab-launcher" class="tab-content">
                             <div class="tab-header">
                                 <h2>Paramètres Launcher</h2>
                                 <p>Personnalisation et options.</p>
                             </div>
-
                             <div class="setting-item">
                                 <label>Thème et Ambiance</label>
                                 <div id="theme-carousel-container" class="theme-carousel-container">
-                                    <!-- Carousel will be injected here by JS -->
                                     <div class="loading-themes">Chargement des thèmes...</div>
                                 </div>
                             </div>
-
-                            <!-- Secret Setting for Leane -->
                             <div class="setting-item toggle-row" id="setting-leane-container" style="display: none;">
                                 <div class="setting-text">
                                     <label for="s-love-popup">Afficher le message d'amour au lancement</label>
@@ -419,7 +338,6 @@
                                     <span class="slider round"></span>
                                 </label>
                             </div>
-
                             <div class="setting-item toggle-row">
                                 <div class="setting-text">
                                     <label for="s-prerelease">Autoriser les versions Bêta.</label>
@@ -430,7 +348,6 @@
                                     <span class="slider round"></span>
                                 </label>
                             </div>
-
                             <div class="setting-item">
                                 <label>Dossier de Données</label>
                                 <div class="file-input-group">
@@ -442,8 +359,6 @@
                                 </div>
                             </div>
                         </div>
-
-                        <!-- TAB: Update (Renamed from About) -->
                         <div id="tab-about" class="tab-content">
                             <div class="tab-header">
                                 <h2>Mise à jour</h2>
@@ -454,27 +369,20 @@
                                     <span class="version-label" style="font-weight: 600;">Version actuelle</span>
                                     <span class="version-number" id="app-version-display" style="font-family: monospace; color: #888;">v--</span>
                                 </div>
-                                
                                 <button id="check-update-btn" class="action-btn" style="width: 100%; padding: 15px; background: #333; text-align: center;">
                                     <i class="fas fa-sync-alt"></i> Rechercher une mise à jour
                                 </button>
                                 <p id="update-status" class="status-msg" style="margin-top: 15px; text-align: center; color: #aaa; min-height: 20px;"></p>
                             </div>
-                            
                             <div class="credits-mini" style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px; text-align: center; color: #444; font-size: 11px;">
                                 HG Launcher - Copyright © 2025 HG.Studio
                             </div>
                         </div>
-
                     </div>
                 </div>
             </div>
-
-
         </div>
     </div>
-
-    <!-- Map Screen -->
     <div id="map-screen" class="map-overlay" style="display: none;">
         <div class="map-header">
                 <h2>Carte du Serveur</h2>
@@ -482,8 +390,6 @@
         </div>
         <iframe id="map-iframe" src="" frameborder="0" class="map-frame"></iframe>
     </div>
-
-    <!-- Update Popup (Forced) -->
     <div id="update-popup" class="update-popup-overlay" style="display: none;">
         <div class="update-popup-content">
             <button id="update-popup-close-btn" class="update-popup-close-btn"><i class="fas fa-times"></i></button>
@@ -493,7 +399,6 @@
             <h2>Mise à jour disponible !</h2>
             <p>Une nouvelle version du launcher est disponible (<span id="popup-new-version">vX.X.X</span>).</p>
             <p class="sub-text">Cette mise à jour est requise pour continuer à jouer.</p>
-            
             <div class="popup-actions">
                 <button id="popup-update-btn" class="update-confirm-btn">
                     <i class="fas fa-download"></i> INSTALLER MAINTENANT
@@ -502,8 +407,6 @@
             <p id="popup-update-status" class="status-msg"></p>
         </div>
     </div>
-
-    <!-- Love Popup (Hidden) -->
     <div id="love-popup" style="display: none;">
         <div class="love-content">
             <h1 class="love-title">Coucou chat <i class="fas fa-heart"></i></h1>
@@ -518,13 +421,9 @@
             </div>
         </div>
     </div>
-
-    <!-- Love Footer (Hidden) -->
     <div id="love-footer" style="display: none;">
         je t'aime fort princesse oublie le jamais ! <i class="fas fa-heart"></i>
     </div>
-
-    <!-- Window Controls (Global Overlay) -->
     <div class="window-controls-header">
         <button id="update-notify-btn" title="Mise à jour disponible" style="display: none; color: var(--primary-pink); animation: pulse 2s infinite;">
             <i class="fas fa-sync-alt"></i>
@@ -532,8 +431,6 @@
         <button id="minimize-btn" title="Minimize"><i class="fas fa-minus"></i></button>
         <button id="close-btn" title="Close"><i class="fas fa-times"></i></button>
     </div>
-
-    <!-- SKIN IMPORT MODAL (Pop-up like reference) -->
     <div id="skin-import-popup" class="modal-overlay" style="display: none; z-index: 9100;">
         <div class="import-content">
             <div class="import-header">
@@ -559,15 +456,11 @@
                             </label>
                         </div>
                     </div>
-
-                    <!-- Cape Selector (Dynamic) -->
                     <div class="input-group" id="cape-selector-group" style="display:none; margin-top: 15px;">
                         <label>Choisir une Cape</label>
                         <div id="cape-list" class="cape-list">
-                            <!-- Capes options will be injected here -->
                         </div>
                     </div>
-
                     <div class="import-footer">
                         <button id="cancel-import-btn" class="secondary-btn">Annuler</button>
                         <button id="confirm-import-btn" class="primary-btn">Sauvegarder</button>
@@ -576,8 +469,6 @@
             </div>
         </div>
     </div>
-
-    <!-- SKIN WARDROBE MODAL -->
     <div id="skin-wardrobe-modal" class="modal-overlay" style="display: none;">
         <div class="wardrobe-content">
             <div class="wardrobe-header">
@@ -585,7 +476,6 @@
                 <button id="close-wardrobe-btn" class="close-action-btn"><i class="fas fa-times"></i></button>
             </div>
             <div class="wardrobe-body">
-                <!-- 3D Preview -->
                 <div class="wardrobe-preview-column">
                     <canvas id="skin-canvas" width="300" height="400"></canvas>
                     <div class="preview-controls">
@@ -593,33 +483,23 @@
                         <button id="toggle-cape-btn" title="Cape"><i class="fas fa-user-secret"></i></button>
                     </div>
                 </div>
-                
-                <!-- Selection Grid -->
                 <div class="wardrobe-selection-column">
                     <div class="wardrobe-actions">
                         <button id="import-skin-btn"><i class="fas fa-upload"></i> IMPORTER UN SKIN</button>
                         <button id="save-skin-btn"><i class="fas fa-save"></i> APPLIQUER</button>
                     </div>
-
-                    <!-- Removed inline skin config section (now in popup) -->
-                    
                     <h3>Mes Skins</h3>
                     <div id="saved-skins-grid" class="skin-grid" style="flex: 0 0 100px; max-height: 120px; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 20px;">
-                        <!-- Saved skins go here -->
                         <p class="empty-hint">Aucun skin sauvegardé</p>
                     </div>
-
                     <h3>Skins par défaut</h3>
                     <div id="skin-presets-grid" class="skin-grid">
-                        <!-- Items injected by JS -->
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    
     <script src="renderer.js"></script>
-    <!-- SKINVIEW 3D LIB (loaded after renderer to prevent blocking startup) -->
     <script src="https://bs-community.github.io/skinview3d/js/skinview3d.bundle.js" defer></script>
 </body>
 </html>
