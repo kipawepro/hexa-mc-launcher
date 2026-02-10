@@ -543,6 +543,7 @@ ipcMain.handle('launch-game', async (event, options) => {
         if (t.includes('hardcore')) instanceFolderName = 'hg_studio_hardcore';
         else if (t.includes('cherry')) instanceFolderName = 'hg_studio_cherry';
         else if (t.includes('dragon')) instanceFolderName = 'hg_studio_dragon';
+        else if (t.includes('atm10')) instanceFolderName = 'hg_studio_atm10';
         else if (t.includes('autumn') || t.includes('autum')) instanceFolderName = 'hg_studio_autumn';
     }
     if (activeModpack) {
@@ -568,10 +569,31 @@ ipcMain.handle('launch-game', async (event, options) => {
             return { success: false, message: "Erreur lors de l'installation du modpack: " + err.message };
         }
     }
-    let javaPath = config.javaPath17 || config.javaPath;
+    let targetJavaVersion = 17;
+
+    // Detect required Java version
+    if (gameVersion) {
+        const parts = gameVersion.split('.').map(Number);
+        if (parts.length >= 2) {
+             const minor = parts[1];
+             const patch = parts[2] || 0;
+             // 1.20.5+ requires Java 21
+             if (minor > 20 || (minor === 20 && patch >= 5)) {
+                 targetJavaVersion = 21;
+             } else if (minor < 17) {
+                 // 1.16 and below typically use Java 8, but 1.18+ needs 17.
+                 // Let's stick to 17 for 1.18-1.19. For extremely old (1.12), maybe 8?
+                 // Current Modpacks are usually modern. 
+                 // If the user needs Java 8 for 1.12, add logic here.
+                 if (minor <= 16) targetJavaVersion = 8;
+             }
+        }
+    }
+
+    let javaPath = config[`javaPath${targetJavaVersion}`] || config.javaPath;
     if (!javaPath) {
         try {
-            javaPath = await ensureJava(globalRoot, mainWindow, 17);
+            javaPath = await ensureJava(globalRoot, mainWindow, targetJavaVersion);
         } catch (error) {
             console.error('Java Setup Error:', error);
             if (mainWindow) mainWindow.webContents.send('log', `Java Error: ${error.message}`);
@@ -619,12 +641,9 @@ ipcMain.handle('launch-game', async (event, options) => {
             ...(config.jvmArgs ? config.jvmArgs.split(' ') : [])
         ],
         customLaunchArgs: [
-            '--accessToken', authorization.access_token,
-            '--uuid', authorization.uuid,
-            '--username', authorization.name,
-            '--userType', 'msa',
-            '--assetsDir', path.join(rootPath, 'assets'),
-            '--assetIndex', gameVersion 
+            // Removed --assetsDir and --assetIndex as they might be duplicated by MCLC
+            // Only keeping arguments not automatically handled if necessary
+            // If MCLC 6.0.54 handles assets, we should let it do so.
         ],
         checkFiles: true,
         ignoreMissingAssets: false, 
@@ -638,7 +657,13 @@ ipcMain.handle('launch-game', async (event, options) => {
             fullscreen: config.fullscreen || false
         }
     };
-    if (config.autoConnectIP) {
+    // Auto-Connect logic
+    // Disable auto-connect for ATM10 or other heavy modpacks if the server IP is likely for the main server
+    // For now, we only allow Auto-Connect on 'hg_studio_official' or 'hg_studio_hardcore' (if applicable)
+    // or explicitly block it for atm10.
+    const isATM10 = instanceFolderName.includes('atm10') || (loaderConfig && loaderConfig.type === 'neoforge');
+
+    if (config.autoConnectIP && !isATM10) {
         const parts = config.autoConnectIP.split(':');
         const ip = parts[0];
         const port = parts[1] || '25565';
@@ -646,6 +671,9 @@ ipcMain.handle('launch-game', async (event, options) => {
         if (mainWindow) mainWindow.webContents.send('log', `Auto-Connect activé: ${ip}:${port}`);
         opts.customArgs.push('--server', ip);
         opts.customArgs.push('--port', port);
+    } else if (config.autoConnectIP && isATM10) {
+        console.log(`[Feature] Auto-Connect skipped for ATM10 (Prevent Registry Sync Crash)`);
+        if (mainWindow) mainWindow.webContents.send('log', `Auto-Connect désactivé pour ATM10 (Compatibilité).`);
     }
     try {
         const globalOptionsDir = path.join(rootPath, 'global-options');
@@ -792,6 +820,33 @@ ipcMain.handle('launch-game', async (event, options) => {
             } catch (e) {
                 console.error("Error preparing Forge", e);
             }
+        } else if (loaderConfig.type === 'neoforge') {
+            const neoforgeVersion = loaderConfig.version;
+            const neoforgeUrl = `https://maven.neoforged.net/releases/net/neoforged/neoforge/${neoforgeVersion}/neoforge-${neoforgeVersion}-installer.jar`;
+            const neoforgePath = path.join(rootPath, 'neoforge', `${neoforgeVersion}`, `neoforge-${neoforgeVersion}-installer.jar`);
+            try {
+                await fs.mkdir(path.dirname(neoforgePath), { recursive: true });
+                try {
+                    await fs.access(neoforgePath);
+                } catch {
+                    if (mainWindow) mainWindow.webContents.send('log', `Téléchargement de NeoForge...`);
+                    const res = await fetch(neoforgeUrl);
+                    if (res.ok) {
+                        const dest = fsOriginal.createWriteStream(neoforgePath);
+                        await new Promise((resolve, reject) => {
+                            res.body.pipe(dest);
+                            res.body.on("error", reject);
+                            dest.on("finish", resolve);
+                        });
+                    } else {
+                        throw new Error(`Failed to download NeoForge: ${res.statusText}`);
+                    }
+                }
+                opts.forge = neoforgePath;
+            } catch (e) {
+                console.error("Error preparing NeoForge", e);
+                if (mainWindow) mainWindow.webContents.send('log', `Erreur NeoForge: ${e.message}`);
+            }
         } else if (loaderConfig.type === 'quilt') {
             const quiltVersion = loaderConfig.version;
             const quiltUrl = `https://meta.quiltmc.org/v3/versions/loader/${gameVersion}/${quiltVersion}/profile/json`;
@@ -915,6 +970,24 @@ ipcMain.handle('launch-game', async (event, options) => {
         }
     });
     try {
+        // Revert ModernFix Workaround (User Request - caused Timeouts)
+        try {
+            const mFixPath = path.join(rootPath, 'config', 'modernfix-mixins.properties');
+            let mFixContent = '';
+            try {
+                mFixContent = await fs.readFile(mFixPath, 'utf8');
+            } catch {}
+            
+            if (mFixContent.includes('mixin.perf.reduce_blockstate_cache_rebuilds=false')) {
+                console.log("[Fix] Removing ModernFix workaround...");
+                if (mainWindow) mainWindow.webContents.send('log', "annulation correctif ModernFix...");
+                const newContent = mFixContent.replace(/[\r\n]+mixin\.perf\.reduce_blockstate_cache_rebuilds=false/g, '');
+                await fs.writeFile(mFixPath, newContent);
+            }
+        } catch (fixErr) {
+            console.warn("[Fix] Failed to revert ModernFix workaround:", fixErr);
+        }
+
         // Force delete indexes to ensure fresh download if previous one was corrupted
         if (config.repairAssets) { // Hidden toggle or auto-repair logic could trigger this
              // For now, let's just log.
@@ -1613,9 +1686,12 @@ async function installMrPack(url, installPath, mainWindow) {
         }
         try {
             await fs.access(overridesDir);
-            if (mainWindow) mainWindow.webContents.send('log', `Installation des configurations...`);
+            if (mainWindow) mainWindow.webContents.send('log', `Installation des configurations (Overrides)...`);
+            console.log("Copying overrides from:", overridesDir);
             await copyDir(overridesDir, installPath);
         } catch (e) {
+            console.error("Overrides copy failed or empty:", e);
+            if (mainWindow) mainWindow.webContents.send('log', `Note: Pas d'overrides ou erreur copie (${e.message})`);
         }
         return { gameVersion, loader };
     } catch (err) {
