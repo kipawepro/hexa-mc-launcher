@@ -1082,18 +1082,48 @@ ipcMain.handle('get-themes', async () => {
                     await fs.access(configPath);
                     const configData = await fs.readFile(configPath, 'utf8');
                     const config = JSON.parse(configData);
+                    
+                    let bgType = null;
+                    let bgFile = null;
+                    let logoFile = null;
+                    
                     const videoPath = path.join(themePath, 'background.mp4');
-                    let hasVideo = false;
+                    const pngPath = path.join(themePath, 'background.png');
+                    const jpgPath = path.join(themePath, 'background.jpg');
+                    const logoPath = path.join(themePath, 'logo.png');
+
+                    try {
+                        await fs.access(logoPath);
+                        logoFile = 'logo.png';
+                    } catch {}
+                    
                     try {
                         await fs.access(videoPath);
-                        hasVideo = true;
-                    } catch(e) {}
-                    if (hasVideo) {
+                        bgType = 'video';
+                        bgFile = 'background.mp4';
+                    } catch {
+                        try {
+                             await fs.access(pngPath);
+                             bgType = 'image';
+                             bgFile = 'background.png';
+                        } catch {
+                            try {
+                                 await fs.access(jpgPath);
+                                 bgType = 'image';
+                                 bgFile = 'background.jpg';
+                            } catch {}
+                        }
+                    }
+
+                    if (bgType) {
                         themes.push({
                             id: item.name,
                             folder: item.name, 
                             title: config.title || item.name,
-                            accentColor: config.accentColor || '#ff0055' 
+                            accentColor: config.accentColor || '#ff0055',
+                            bgType: bgType,
+                            bgFile: bgFile,
+                            logoFile: logoFile 
                         });
                     }
                 } catch (e) {
@@ -1198,6 +1228,7 @@ async function getInstanceRoot() {
         if (t.includes('hardcore')) instanceFolderName = 'hg_studio_hardcore';
         else if (t.includes('cherry')) instanceFolderName = 'hg_studio_cherry';
         else if (t.includes('dragon')) instanceFolderName = 'hg_studio_dragon';
+        else if (t.includes('atm10')) instanceFolderName = 'hg_studio_atm10';
         else if (t.includes('autumn') || t.includes('autum')) instanceFolderName = 'hg_studio_autumn';
     }
     return path.join(app.getPath('appData'), '.hg_oo', 'instances', instanceFolderName); 

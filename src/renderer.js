@@ -29,10 +29,26 @@ window.addEventListener('DOMContentLoaded', () => {
             if (currentTheme) {
                 document.documentElement.style.setProperty('--primary-pink', currentTheme.accentColor);
                 if (window.updateSelectorForTheme) window.updateSelectorForTheme(currentTheme.id);
+                
                 const bgVideo = document.getElementById('bg-video');
-                if (bgVideo) {
-                    bgVideo.src = `assets/themes/${currentTheme.folder}/background.mp4`;
-                    bgVideo.play().catch(e => {}); 
+                const bgImage = document.getElementById('bg-image');
+                
+                if (currentTheme.bgType === 'image') {
+                     if (bgVideo) {
+                         bgVideo.style.display = 'none';
+                         bgVideo.pause();
+                     }
+                     if (bgImage) {
+                         bgImage.style.display = 'block';
+                         bgImage.src = `assets/themes/${currentTheme.folder}/${currentTheme.bgFile}`;
+                     }
+                } else {
+                     if (bgImage) bgImage.style.display = 'none';
+                     if (bgVideo) {
+                         bgVideo.style.display = 'block';
+                         bgVideo.src = `assets/themes/${currentTheme.folder}/${currentTheme.bgFile || 'background.mp4'}`;
+                         bgVideo.play().catch(e => {}); 
+                     }
                 }
             } else {
             }
@@ -357,56 +373,94 @@ const loadingOverlay = document.getElementById('loading-overlay');
 const loadingLog = document.getElementById('loading-log');
 const verBase = document.getElementById('ver-base');
 const verEnhanced = document.getElementById('ver-enhanced');
+const verAtm10 = document.getElementById('ver-atm10');
 const verHardcore = document.getElementById('ver-hardcore');
 const modpackNameStatus = document.getElementById('modpack-name');
+
 window.updateSelectorForTheme = (themeId) => {
     if (!themeId) return;
     const t = themeId.toLowerCase();
-    if (!verBase || !verEnhanced || !verHardcore) return;
-    if (t.includes('hardcore')) {
-        verBase.style.display = 'none';
-        verEnhanced.style.display = 'none';
-        verHardcore.style.display = 'flex';
-        verHardcore.click();
-    } else {
-        verBase.style.display = 'flex';
-        verEnhanced.style.display = 'flex';
-        verHardcore.style.display = 'none';
-        if (verHardcore.classList.contains('active')) {
+    
+    // Hide all first? Or manage explicitly.
+    // ATM10 Case
+    if (t.includes('atm10')) {
+        if(verBase) verBase.style.display = 'none';
+        if(verEnhanced) verEnhanced.style.display = 'none';
+        if(verHardcore) verHardcore.style.display = 'none';
+        if(verAtm10) {
+            verAtm10.style.display = 'flex';
+            verAtm10.click(); 
+        }
+    } 
+    // Hardcore Case
+    else if (t.includes('hardcore')) {
+        if(verBase) verBase.style.display = 'none';
+        if(verEnhanced) verEnhanced.style.display = 'none';
+        if(verAtm10) verAtm10.style.display = 'none';
+        if(verHardcore) {
+            verHardcore.style.display = 'flex';
+            verHardcore.click();
+        }
+    } 
+    // Default Case (HG S1 / Enhanced)
+    else {
+        if(verAtm10) verAtm10.style.display = 'none';
+        if(verHardcore) verHardcore.style.display = 'none';
+        
+        if(verBase) verBase.style.display = 'flex';
+        if(verEnhanced) verEnhanced.style.display = 'flex';
+        
+        // Return to base if we were in another mode
+        const isAtmActive = verAtm10 && verAtm10.classList.contains('active');
+        const isHcActive = verHardcore && verHardcore.classList.contains('active');
+        
+        if (isAtmActive || isHcActive || (!verBase.classList.contains('active') && !verEnhanced.classList.contains('active'))) {
             verBase.click();
         }
     }
 }
-if (verBase && verEnhanced) {
-    const setVersion = (version) => {
-        launchBtn.style.color = 'transparent';
-        setTimeout(() => {
-            verBase.classList.remove('active');
-            verEnhanced.classList.remove('active');
-            if (verHardcore) verHardcore.classList.remove('active');
-            if (version === 'base') {
-                verBase.classList.add('active');
-                launchBtn.classList.remove('coming-soon');
-                launchBtn.innerHTML = 'JOUER';
-                if (modpackNameStatus) modpackNameStatus.innerText = 'Prêt à jouer';
-            } else if (version === 'enhanced') {
-                verEnhanced.classList.add('active');
-                launchBtn.classList.add('coming-soon');
-                launchBtn.innerHTML = 'BIENTÔT DISPONIBLE';
-                if (modpackNameStatus) modpackNameStatus.innerText = 'HG Studio Enhanced';
-            } else if (version === 'hardcore') {
-                if (verHardcore) verHardcore.classList.add('active');
-                launchBtn.classList.remove('coming-soon');
-                launchBtn.innerHTML = 'JOUER (HC)';
-                if (modpackNameStatus) modpackNameStatus.innerText = 'Mode Hardcore';
-            }
-            launchBtn.style.color = '';
-        }, 200); 
-    };
-    verBase.addEventListener('click', () => setVersion('base'));
-    verEnhanced.addEventListener('click', () => setVersion('enhanced'));
-    if(verHardcore) verHardcore.addEventListener('click', () => setVersion('hardcore'));
-}
+
+// Unified Version Logic
+const setVersion = (version) => {
+    launchBtn.style.color = 'transparent';
+    
+    setTimeout(() => {
+        // Reset classes
+        if(verBase) verBase.classList.remove('active');
+        if(verEnhanced) verEnhanced.classList.remove('active');
+        if(verAtm10) verAtm10.classList.remove('active');
+        if(verHardcore) verHardcore.classList.remove('active');
+
+        if (version === 'base') {
+            if(verBase) verBase.classList.add('active');
+            launchBtn.classList.remove('coming-soon');
+            launchBtn.innerHTML = 'JOUER';
+            if (modpackNameStatus) modpackNameStatus.innerText = 'Prêt à jouer';
+        } else if (version === 'enhanced') {
+            if(verEnhanced) verEnhanced.classList.add('active');
+            launchBtn.classList.add('coming-soon');
+            launchBtn.innerHTML = 'BIENTÔT DISPONIBLE';
+            if (modpackNameStatus) modpackNameStatus.innerText = 'HG Studio Enhanced';
+        } else if (version === 'atm10') {
+            if(verAtm10) verAtm10.classList.add('active');
+            launchBtn.classList.remove('coming-soon');
+            launchBtn.innerHTML = 'JOUER';
+            if (modpackNameStatus) modpackNameStatus.innerText = 'All The Mods 10-5.5';
+        } else if (version === 'hardcore') {
+            if (verHardcore) verHardcore.classList.add('active');
+            launchBtn.classList.remove('coming-soon');
+            launchBtn.innerHTML = 'JOUER (HC)';
+            if (modpackNameStatus) modpackNameStatus.innerText = 'Mode Hardcore';
+        }
+        
+        launchBtn.style.color = '';
+    }, 200); 
+};
+
+if(verBase) verBase.addEventListener('click', () => setVersion('base'));
+if(verEnhanced) verEnhanced.addEventListener('click', () => setVersion('enhanced'));
+if(verAtm10) verAtm10.addEventListener('click', () => setVersion('atm10'));
+if(verHardcore) verHardcore.addEventListener('click', () => setVersion('hardcore'));
 launchBtn.addEventListener('click', async () => {
     if (launchBtn.classList.contains('coming-soon')) return;
     loadingOverlay.style.display = 'flex';
@@ -426,9 +480,9 @@ launchBtn.addEventListener('click', async () => {
         if (currentThemeId === 'Cherry' && config.modpack_cherry) {
             targetModpack = config.modpack_cherry;
             console.log("Using Cherry Modpack");
-        } else if (currentThemeId === 'Dragon' && config.modpack_dragon) {
-            targetModpack = config.modpack_dragon;
-            console.log("Using Dragon Modpack");
+        } else if (currentThemeId === 'Atm10' && config.modpack_atm10) {
+            targetModpack = config.modpack_atm10;
+            console.log("Using Atm10 Modpack");
         } else if (currentThemeId === 'Autum' && config.modpack_autumn) {
             targetModpack = config.modpack_autumn;
             console.log("Using Autumn Modpack");
@@ -580,32 +634,64 @@ settingsBtn.addEventListener('click', async () => {
                 if (settings.activeTheme === theme.id) {
                     card.classList.add('active');
                 }
-                const videoSrc = `assets/themes/${theme.folder}/background.mp4`;
-                card.innerHTML = `
+                
+                let previewHtml;
+                if (theme.bgType === 'image') {
+                    const imgSrc = `assets/themes/${theme.folder}/${theme.logoFile || theme.bgFile}`;
+                    previewHtml = `
+                    <div class="theme-preview">
+                        <img src="${imgSrc}" style="width: 100%; height: 100%; object-fit: cover;">
+                    </div>`;
+                } else {
+                     const videoSrc = `assets/themes/${theme.folder}/${theme.bgFile || 'background.mp4'}`;
+                     previewHtml = `
                     <div class="theme-preview">
                         <video muted loop preload="metadata">
                             <source src="${videoSrc}" type="video/mp4">
                         </video>
                         <i class="fas fa-play preview-play-icon"></i>
-                    </div>
+                    </div>`;
+                }
+                
+                card.innerHTML = `
+                    ${previewHtml}
                     <div class="theme-info">
                         <span class="theme-title" title="${theme.title}">${theme.title}</span>
                         <div class="theme-color-dot" style="background-color: ${theme.accentColor}"></div>
                     </div>
                 `;
-                const video = card.querySelector('video');
-                card.addEventListener('mouseenter', () => { video.play().catch(e => {}); });
-                card.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });
+
+                if (theme.bgType !== 'image') {
+                    const video = card.querySelector('video');
+                    card.addEventListener('mouseenter', () => { video.play().catch(e => {}); });
+                    card.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });
+                }
+
                 card.addEventListener('click', async () => {
                     document.documentElement.style.setProperty('--primary-pink', theme.accentColor);
                     if (window.updateSelectorForTheme) window.updateSelectorForTheme(theme.id);
-                    const bgVideo = document.getElementById('bg-video');
-                    if (bgVideo) {
-                        bgVideo.src = videoSrc;
-                        bgVideo.play().catch(e => console.error(e));
-                    }
+                    
+                     const bgVideo = document.getElementById('bg-video');
+                     const bgImage = document.getElementById('bg-image');
+                     
+                     if (theme.bgType === 'image') {
+                         if (bgVideo) { bgVideo.style.display = 'none'; bgVideo.pause(); }
+                         if (bgImage) {
+                             bgImage.style.display = 'block';
+                             bgImage.src = `assets/themes/${theme.folder}/${theme.bgFile}`;
+                         }
+                     } else {
+                         if (bgImage) bgImage.style.display = 'none';
+                         if (bgVideo) {
+                             bgVideo.style.display = 'block';
+                             bgVideo.src = `assets/themes/${theme.folder}/${theme.bgFile}`;
+                             bgVideo.play().catch(e => console.error(e));
+                         }
+                     }
+
                     document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('active'));
                     card.classList.add('active');
+                    
                     try {
                         const currentSettings = await window.api.getSettings();
                         await window.api.saveSettings({

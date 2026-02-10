@@ -19,6 +19,7 @@
            <video autoplay muted loop id="bg-video" poster="assets/background.jpg">
                 <source src="assets/cinematic.mp4" type="video/mp4">
            </video>
+           <img id="bg-image" src="" alt="" style="display: none; width: 100%; height: 100%; object-fit: cover;">
         </div>
         <div class="video-overlay"></div>
         <header class="main-header">
@@ -104,6 +105,7 @@
                     <div class="center-column">
                         <div class="version-selector-container">
                             <div class="version-selector">
+                                <!-- Standard Modes -->
                                 <div class="version-option active" data-version="base" id="ver-base">
                                     <span>HG S1</span>
                                 </div>
@@ -111,6 +113,14 @@
                                     <span>Enhanced</span>
                                     <span class="badge-new">NEW</span>
                                 </div>
+
+                                <!-- ATM10 Mode -->
+                                <div class="version-option" data-version="atm10" id="ver-atm10" style="display: none;">
+                                    <span>All The Mods 10-5.5</span>
+                                    <span class="badge-new">NEW</span>
+                                </div>
+
+                                <!-- Hardcore Mode -->
                                 <div class="version-option" data-version="hardcore" id="ver-hardcore" style="display: none;">
                                     <span>hg.hardcore</span>
                                 </div>
