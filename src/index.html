@@ -124,6 +124,12 @@
                                 <div class="version-option" data-version="hardcore" id="ver-hardcore" style="display: none;">
                                     <span>hg.hardcore</span>
                                 </div>
+                                
+                                <!-- Create Custom -->
+                                <div class="version-option special-create" id="btn-create-inst" style="border: 1px dashed rgba(255,255,255,0.3);">
+                                    <span>+ Créer Instance</span>
+                                </div>
+                                
                                 <div class="selector-highlight"></div>
                             </div>
                         </div>
@@ -509,6 +515,203 @@
             </div>
         </div>
     </div>
+    
+    <!-- MODRINTH BROWSER OVERLAY -->
+    <div id="browser-tab" class="browser-layout" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: white; z-index: 5000; flex-direction: column;">
+         <div class="browser-header" style="display: flex; align-items: center; padding: 20px 40px; border-bottom: 1px solid #eee; gap: 30px;">
+            <div class="browser-nav-tabs" style="display: flex; gap: 20px;">
+                <button class="nav-tab-btn active" data-type="modpack" style="border:none; background:none; font-weight:800; color:#000; cursor:pointer;">MODPACKS</button>
+                <button class="nav-tab-btn" data-type="mod" style="border:none; background:none; font-weight:800; color:#999; cursor:pointer;">MODS</button>
+                <button class="nav-tab-btn" data-type="resourcepack" style="border:none; background:none; font-weight:800; color:#999; cursor:pointer;">RESOURCE PACKS</button>
+                <button class="nav-tab-btn" data-type="shader" style="border:none; background:none; font-weight:800; color:#999; cursor:pointer;">SHADERS</button>
+            </div>
+            <div class="browser-search-container" style="flex: 1; display: flex; max-width: 400px; gap: 0;">
+                <input type="text" id="browser-search" placeholder="Search..." class="hex-input" style="flex:1; padding: 10px; border: 1px solid #eee;">
+                <button class="search-icon-btn" id="do-search-btn" style="width: 50px; background: #000; color: white; border: none; cursor: pointer;">🔍</button>
+            </div>
+            <button class="secondary-btn" id="close-browser-btn" style="margin-left: auto; background: #000; color: #fff; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer;">EXIT</button>
+        </div>
+
+        <div class="browser-layout-inner" style="display: flex; height: 100%; overflow: hidden;">
+            <aside class="browser-sidebar" style="width: 260px; padding: 30px; background: #fff; border-right: 1px solid #eee; overflow-y: auto;">
+                <div class="filter-group">
+                    <h4>GAME VERSION</h4>
+                    <div class="filter-list" id="list-version">
+                        <div class="filter-link active" data-value="">All Versions</div>
+                        <div class="filter-link" data-value="1.21.4">1.21.4</div>
+                        <div class="filter-link" data-value="1.21.1">1.21.1</div>
+                        <div class="filter-link" data-value="1.20.1">1.20.1</div>
+                        <div class="filter-link" data-value="1.19.2">1.19.2</div>
+                        <div class="filter-link" data-value="1.18.2">1.18.2</div>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <h4>LOADER</h4>
+                    <div class="filter-list" id="list-loader">
+                        <div class="filter-link active" data-value="">Any Loader</div>
+                        <div class="filter-link" data-value="fabric">Fabric</div>
+                        <div class="filter-link" data-value="forge">Forge</div>
+                        <div class="filter-link" data-value="neoforge">NeoForge</div>
+                        <div class="filter-link" data-value="quilt">Quilt</div>
+                    </div>
+                </div>
+                
+                 <div class="filter-group">
+                    <h4>ENVIRONMENT</h4>
+                    <div class="filter-list" id="list-env">
+                        <div class="filter-link active" data-value="">Any Side</div>
+                        <div class="filter-link" data-value="client">Client</div>
+                        <div class="filter-link" data-value="server">Server</div>
+                    </div>
+                </div>
+                
+                 <div class="filter-group">
+                    <h4>CATEGORIES</h4>
+                    <div class="filter-list" id="list-category">
+                        <div class="filter-link active" data-value="">All Categories</div>
+                        <div class="filter-link" data-value="adventure">Adventure</div>
+                        <div class="filter-link" data-value="challenging">Challenging</div>
+                        <div class="filter-link" data-value="combat">Combat</div>
+                        <div class="filter-link" data-value="kitchen_sink">Kitchen Sink</div>
+                        <div class="filter-link" data-value="lightweight">Lightweight</div>
+                        <div class="filter-link" data-value="magic">Magic</div>
+                        <div class="filter-link" data-value="multiplayer">Multiplayer</div>
+                        <div class="filter-link" data-value="optimization">Optimization</div>
+                        <div class="filter-link" data-value="quests">Quests</div>
+                        <div class="filter-link" data-value="technology">Technology</div>
+                    </div>
+                </div>
+            </aside>
+
+            <div class="browser-results" style="flex: 1; padding: 30px; overflow-y: auto; background: #fff;">
+                <div class="content-grid" id="browser-grid" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px;">
+                    <!-- Results -->
+                </div>
+                
+                  <div id="browser-pagination" style="display: flex; justify-content: center; align-items: center; padding: 20px; gap: 20px;">
+                      <button id="btn-prev-page" style="padding: 10px 20px; background: #222; color: #fff; border: 1px solid #444; border-radius: 8px; cursor: pointer; font-family: 'Outfit'; transition: background 0.2s;">Précédent</button>
+                      <span id="page-indicator" style="color: #000; font-family: 'Space Grotesk'; font-weight: bold;">Page 1</span>
+                      <button id="btn-next-page" style="padding: 10px 20px; background: #222; color: #fff; border: 1px solid #444; border-radius: 8px; cursor: pointer; font-family: 'Outfit'; transition: background 0.2s;">Suivant</button>
+                  </div>
+                  <div id="browser-loader" style="text-align:center; padding:40px; display:none; color: #888;">
+                     Searching Modrinth...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Instance Modal -->
+    <div id="new-instance-modal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 7000; justify-content: center; align-items: center;">
+        <div class="modal-box" style="background: #111; padding: 30px; border-radius: 12px; width: 400px; border: 1px solid #333; color: white;">
+            <div class="modal-header" style="display:flex; justify-content:space-between; margin-bottom: 20px;">
+                <h2 style="margin:0; font-size: 20px; font-family: 'Space Grotesk', sans-serif;">Nouvelle Instance</h2>
+                <button id="close-modal-btn" style="background:none; border:none; color:white; font-size:24px; cursor:pointer;">&times;</button>
+            </div>
+            
+            <div class="input-container">
+                <div class="input-group" style="margin-bottom: 20px;">
+                    <label style="font-size:12px; font-weight:700; display:block; margin-bottom:5px; color:#aaa; font-family: 'Outfit', sans-serif;">NOM</label>
+                    <input type="text" id="inst-name" placeholder="Mon Modpack" style="width:100%; padding: 12px; background: #222; border: 1px solid #444; color: white; border-radius: 6px; font-family: 'Outfit', sans-serif;">
+                </div>
+                
+                <div class="input-group" style="margin-bottom: 20px;">
+                    <label style="font-size:12px; font-weight:700; display:block; margin-bottom:5px; color:#aaa; font-family: 'Outfit', sans-serif;">VERSION</label>
+                    <select id="inst-version" style="width:100%; padding: 12px; background: #222; border: 1px solid #444; color: white; border-radius: 6px; font-family: 'Outfit', sans-serif;">
+                        <option value="">Chargement...</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label style="font-size:12px; font-weight:700; display:block; margin-bottom:5px; color:#aaa; font-family: 'Outfit', sans-serif;">LOADER</label>
+                    <select id="inst-loader" style="width:100%; padding: 12px; background: #222; border: 1px solid #444; color: white; border-radius: 6px; font-family: 'Outfit', sans-serif;">
+                        <option value="vanilla">Vanilla</option>
+                        <option value="fabric">Fabric</option>
+                        <option value="quilt">Quilt</option>
+                        <option value="forge">Forge</option>
+                        <option value="neoforge">NeoForge</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="modal-actions" style="margin-top: 30px; display:flex; justify-content:flex-end; gap:10px;">
+                <button id="cancel-create-btn" style="padding: 10px 20px; background: transparent; color: #aaa; border: 1px solid #444; border-radius: 6px; cursor:pointer; font-family: 'Outfit', sans-serif;">Annuler</button>
+                <button id="confirm-create-btn" style="padding: 10px 20px; background: var(--primary-pink); color: white; border: none; border-radius: 6px; font-weight:bold; cursor:pointer; font-family: 'Outfit', sans-serif;">HACK IN</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="select-instance-modal" class="modal-overlay" style="display: none; z-index: 6000;">
+        <div class="wardrobe-content" style="height: auto; max-height: 80vh; width: 400px;">
+            <div class="wardrobe-header">
+                <h2>Select Instance</h2>
+                <button id="close-select-inst-btn" class="close-action-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="wardrobe-body" style="padding: 20px; flex-direction: column;">
+                <p style="color:#ccc; margin-bottom: 15px;">Choose where to install this mod:</p>
+                <div id="instance-selection-list" style="display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: 300px;">
+                    <!-- Injected Instances -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="instance-details-modal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 8000; flex-direction: column;">
+        <div class="inst-view-header" style="background: #111; padding: 20px 40px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <div style="display:flex; gap: 20px; align-items: center;">
+                <div style="width: 64px; height: 64px; background: #333; border-radius: 12px; display:flex; align-items:center; justify-content:center;">
+                    <i class="fas fa-cube" style="font-size: 30px; color: #666;"></i>
+                </div>
+                <div>
+                    <h1 id="inst-view-name" style="margin: 0; font-size: 24px; font-family: 'Space Grotesk';">Instance Name</h1>
+                    <div style="display:flex; gap:10px; margin-top:5px; font-size: 13px; color: #888;">
+                        <span id="inst-view-version">1.20.1</span>
+                        <span>•</span>
+                        <span id="inst-view-loader">Fabric</span>
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button id="inst-view-play-btn" class="cta-btn" style="padding: 10px 40px; font-size: 16px;">JOUER</button>
+                <button id="inst-view-close-btn" style="background:transparent; border:none; color:white; font-size:24px; cursor:pointer; padding: 0 20px;">&times;</button>
+            </div>
+        </div>
+        
+        <div class="inst-view-body" style="flex:1; width: 100%; padding: 40px; display: flex; gap: 30px; overflow: hidden;">
+            <!-- Tabs/Sidebar -->
+            <div class="inst-sidebar" style="width: 200px; display:flex; flex-direction:column; gap: 10px;">
+                <button class="inst-tab active" data-target="inst-logs" style="text-align:left; padding: 15px; background: #222; border:none; color:white; border-radius: 6px; cursor:pointer;">Logs</button>
+                <button class="inst-tab" data-target="inst-settings" style="text-align:left; padding: 15px; background: transparent; border:none; color:#888; border-radius: 6px; cursor:pointer;">Options</button>
+                <button id="inst-delete-btn" style="text-align:left; padding: 15px; background: transparent; border:1px solid #d00; color:#d00; border-radius: 6px; cursor:pointer; margin-top: auto;">Supprimer</button>
+            </div>
+            
+            <!-- Content -->
+            <div class="inst-content" style="flex:1; background: #1a1a1a; border-radius: 12px; border: 1px solid #333; overflow: hidden; display:flex; flex-direction:column;">
+                
+                <!-- Logs Tab -->
+                <div id="inst-logs" class="inst-tab-pane" style="display: flex; flex-direction:column; height: 100%;">
+                    <div class="logs-header" style="padding: 15px; border-bottom: 1px solid #333; background: #222; font-size: 12px; font-family: monospace; color: #aaa;">
+                        CONSOLE OUTPUT
+                    </div>
+                    <div id="inst-logs-container" style="flex:1; overflow-y: auto; padding: 15px; font-family: 'Consolas', monospace; font-size: 12px; color: #ddd; white-space: pre-wrap; user-select: text;">
+                        Waiting for game launch...
+                    </div>
+                </div>
+
+                <!-- Settings Tab -->
+                <div id="inst-settings" class="inst-tab-pane" style="display: none; padding: 30px;">
+                    <h3>Configuration de l'instance</h3>
+                    <p style="color:#666; margin-bottom: 20px;">Modifiers les paramètres spécifiques.</p>
+                    
+                    <div class="input-group">
+                        <label>Arguments Java (Override)</label>
+                        <input type="text" placeholder="Hérite du global..." style="width:100%; padding:10px; background:#111; border:1px solid #333; color:white; border-radius:4px;">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="renderer.js"></script>
     <script src="https://bs-community.github.io/skinview3d/js/skinview3d.bundle.js" defer></script>
 </body>

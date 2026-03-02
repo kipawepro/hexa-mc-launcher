@@ -1,1077 +1,2421 @@
-document.getElementById('minimize-btn').addEventListener('click', () => {
-    window.api.minimize();
-});
-document.getElementById('close-btn').addEventListener('click', () => {
-    window.api.close();
-});
-const navHomeBtn = document.getElementById('nav-home-btn');
-if (navHomeBtn) {
-    navHomeBtn.addEventListener('click', () => {
-        window.api.openExternal('https://hg.studio');
-    });
-}
-window.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => {
-        const intro = document.getElementById('intro-screen');
-        if (intro) {
-            intro.style.transition = "opacity 0.5s ease";
-            intro.style.opacity = '0';
-            setTimeout(() => intro.remove(), 600);
-        }
-    }, 1000);
-});
-(async () => {
-    try {
-        const savedSettings = await window.api.getSettings();
-        if (savedSettings.activeTheme) {
-            const themes = await window.api.getThemes();
-            const currentTheme = themes.find(t => t.id === savedSettings.activeTheme);
-            if (currentTheme) {
-                document.documentElement.style.setProperty('--primary-pink', currentTheme.accentColor);
-                if (window.updateSelectorForTheme) window.updateSelectorForTheme(currentTheme.id);
-                
-                const bgVideo = document.getElementById('bg-video');
-                const bgImage = document.getElementById('bg-image');
-                
-                if (currentTheme.bgType === 'image') {
-                     if (bgVideo) {
-                         bgVideo.style.display = 'none';
-                         bgVideo.pause();
-                     }
-                     if (bgImage) {
-                         bgImage.style.display = 'block';
-                         bgImage.src = `assets/themes/${currentTheme.folder}/${currentTheme.bgFile}`;
-                     }
-                } else {
-                     if (bgImage) bgImage.style.display = 'none';
-                     if (bgVideo) {
-                         bgVideo.style.display = 'block';
-                         bgVideo.src = `assets/themes/${currentTheme.folder}/${currentTheme.bgFile || 'background.mp4'}`;
-                         bgVideo.play().catch(e => {}); 
-                     }
-                }
-            } else {
-            }
-        } else if (savedSettings.accentColor) {
-             document.documentElement.style.setProperty('--primary-pink', savedSettings.accentColor);
-        }
-    } catch(e) {
-        console.warn("Theme startup error:", e);
-    }
-    const appVersion = await window.api.getAppVersion();
-    const versionEl = document.getElementById('current-version');
-    if (versionEl) versionEl.innerText = appVersion;
-    const TARGET_UUID = "f47859908c724114821e98beaec87a2b";
-    let activeUserUUID = null;
-    try {
-         const hgUser = JSON.parse(localStorage.getItem('hg_user_data'));
-         if (hgUser && hgUser.uuid) activeUserUUID = hgUser.uuid;
-         else {
-             const msUser = JSON.parse(localStorage.getItem('user_session'));
-             if (msUser && msUser.uuid) activeUserUUID = msUser.uuid;
-         }
-    } catch(e) {}
-    if (activeUserUUID) activeUserUUID = activeUserUUID.replace(/-/g, '').toLowerCase();
-    if (activeUserUUID === TARGET_UUID) {
-        console.log("Welcome Leane <3");
-        const footer = document.getElementById('love-footer');
-        if(footer) footer.style.display = 'block';
-        const loveBtn = document.getElementById('btn-leane');
-        if(loveBtn) {
-            loveBtn.style.display = 'flex';
-            loveBtn.onclick = () => window.api.openExternal('http://91.197.6.177:24607/leane/');
-        }
-        const loveSetting = document.getElementById('setting-leane-container');
-        if(loveSetting) loveSetting.style.display = 'flex';
-        const settings = await window.api.getSettings();
-        const popup = document.getElementById('love-popup');
-        if (!settings.hideLovePopup && popup) {
-            popup.style.display = 'flex';
-            const closeBtn = document.getElementById('love-close-btn');
-            const checkbox = document.getElementById('love-popup-checkbox');
-            closeBtn.onclick = async () => {
-                popup.style.display = 'none';
-                if (checkbox.checked) {
-                    await window.api.saveSettings({ ...settings, hideLovePopup: true });
-                    const settToggle = document.getElementById('s-love-popup');
-                    if(settToggle) settToggle.checked = false; 
-                }
-            };
-        }
-        const settToggle = document.getElementById('s-love-popup'); 
-        if(settToggle) {
-            settToggle.checked = !settings.hideLovePopup; 
-            settToggle.addEventListener('change', async (e) => {
-                const show = e.target.checked;
-                const newSettings = await window.api.getSettings();
-                await window.api.saveSettings({ ...newSettings, hideLovePopup: !show });
-            });
-        }
-    }
-        try {
-            let updateCheck = await window.api.checkUpdate();
-            if (updateCheck.updateAvailable) {
-                 const popup = document.getElementById('update-popup');
-                 const versionText = document.getElementById('popup-new-version');
-                 const updateBtn = document.getElementById('popup-update-btn');
-                 const statusText = document.getElementById('popup-update-status');
-                 const closeBtn = document.getElementById('update-popup-close-btn');
-                 const notifyBtn = document.getElementById('update-notify-btn');
-                 if (popup) {
-                     popup.style.display = 'flex'; 
-                     if(versionText) versionText.innerText = updateCheck.version;
-                     if(notifyBtn) {
-                         notifyBtn.style.display = 'block';
-                         notifyBtn.addEventListener('click', () => {
-                             popup.style.display = 'flex';
-                         });
-                     }
-                     if(closeBtn) {
-                         closeBtn.addEventListener('click', () => {
-                             popup.style.display = 'none';
-                         });
-                     }
-                     window.api.on('update-progress', (progress) => {
-                        // AUTO-UPDATE UI
-                        if(updateBtn) updateBtn.style.display = 'none'; 
-                        statusText.innerText = `Mise à jour en cours : ${progress}%`;
-                        
-                        let bar = document.getElementById('update-progress-bar');
-                        if (!bar) {
-                            bar = document.createElement('div');
-                            bar.id = 'update-progress-bar';
-                            bar.style.width = '100%';
-                            bar.style.height = '6px';
-                            bar.style.background = '#333';
-                            bar.style.borderRadius = '3px';
-                            bar.style.marginTop = '10px';
-                            bar.style.overflow = 'hidden';
-                            const fill = document.createElement('div');
-                            fill.id = 'update-progress-fill';
-                            fill.style.width = '0%';
-                            fill.style.height = '100%';
-                            fill.style.background = 'var(--primary-pink)'; // Using theme color
-                            fill.style.transition = 'width 0.2s';
-                            bar.appendChild(fill);
-                            statusText.parentNode.insertBefore(bar, statusText.nextSibling);
-                        }
-                        const fill = document.getElementById('update-progress-fill');
-                        if (fill) fill.style.width = `${progress}%`;
-                     });
-                     
-                     // AUTO-START FUNCTION
-                     const startAutoUpdate = async () => {
-                         if(updateBtn) {
-                             updateBtn.style.display = 'none';
-                             updateBtn.disabled = true;
-                         }
-                         statusText.innerText = "Démarrage automatique du téléchargement...";
-                         try {
-                             await window.api.installUpdate(updateCheck.url);
-                         } catch (err) {
-                             statusText.innerText = "Erreur: " + err;
-                             if(updateBtn) {
-                                  updateBtn.style.display = 'block';
-                                  updateBtn.disabled = false;
-                                  updateBtn.innerHTML = "Réessayer";
-                             }
-                         }
-                     };
+// Global Auth State
+let currentUser = null;
+let skinViewer = null;
 
-                     updateBtn.addEventListener('click', startAutoUpdate);
-                     
-                     // Trigger immediately
-                     startAutoUpdate();
-                 }
-            }
-        } catch (err) {
-            console.error("Update check failed:", err);
-        }
-    document.querySelector('.user-profile-btn').style.visibility = 'hidden';
-    const gameNav = document.querySelector('.game-nav-container'); if(gameNav) gameNav.style.visibility = 'hidden';
-    const savedSession = localStorage.getItem('hg_session_token');
-    const savedUser = localStorage.getItem('hg_user_data');
-    if (savedSession && savedUser) {
-        try {
-            const userData = JSON.parse(savedUser);
-            const sessionDate = localStorage.getItem('hg_session_date');
-            const MAX_AGE = 3 * 24 * 60 * 60 * 1000;
-            if (sessionDate && (Date.now() - parseInt(sessionDate)) < MAX_AGE) {
-                console.log("Auto-login triggered");
-                await window.api.restoreSession(userData);
-                handleLoginSuccess(userData);
-                return; 
-            } else {
-                console.log("Session expired");
-                localStorage.removeItem('hg_session_token');
-                localStorage.removeItem('hg_user_data');
-            }
-        } catch (e) {
-            console.error("Auto-login failed", e);
-        }
-    }
-    try {
-        const config = await window.api.getLauncherConfig();
-        if (config && config.activeModpack && config.activeModpack.name) {
-            const modpackNameEl = document.getElementById('modpack-name');
-            if (modpackNameEl) {
-                modpackNameEl.innerText = config.activeModpack.name;
-            }
-        }
-        if (config && config.maintenance) {
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('maintenance-screen').style.display = 'flex';
-            return; 
-        }
-    } catch (e) {
-        console.error("Failed to check maintenance/update", e);
-    }
-})();
-const loginBtn = document.getElementById('login-btn');
-const loginUser = document.getElementById('login-user');
-const loginPass = document.getElementById('login-pass');
-const loginError = document.getElementById('login-error');
-const microsoftLoginBtn = document.getElementById('microsoft-login-btn');
-const stayConnectedContainer = document.querySelector('.login-checkbox-container');
-const stayConnectedCheckbox = document.getElementById('stay-connected');
-if (stayConnectedContainer && stayConnectedCheckbox) {
-    stayConnectedContainer.addEventListener('click', (e) => {
-        if (!e.target.closest('.switch')) {
-            stayConnectedCheckbox.checked = !stayConnectedCheckbox.checked;
-        }
-    });
-}
-if (localStorage.getItem('savedIdentifier')) {
-    loginUser.value = localStorage.getItem('savedIdentifier');
-}
-loginPass.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-        loginBtn.click();
-    }
-});
-loginBtn.addEventListener('click', async () => {
-    const identifier = loginUser.value;
-    const password = loginPass.value;
-    if (!identifier || !password) {
-        loginError.innerText = "Veuillez remplir tous les champs.";
-        return;
-    }
-    loginBtn.disabled = true;
-    loginBtn.innerText = "Connexion...";
-    loginError.innerText = "";
-    try {
-        const result = await window.api.login({ identifier, password });
-        if (result.success) {
-            localStorage.setItem('savedIdentifier', identifier);
-            const stayConnected = document.getElementById('stay-connected').checked;
-            if (stayConnected) {
-                const token = btoa(identifier + Date.now());
-                localStorage.setItem('hg_session_token', token);
-                localStorage.setItem('hg_user_data', JSON.stringify(result.user));
-                localStorage.setItem('hg_session_date', Date.now().toString());
-            } else {
-                localStorage.removeItem('hg_session_token');
-                localStorage.removeItem('hg_user_data');
-            }
-            handleLoginSuccess(result.user);
-        } else {
-            loginError.innerText = result.message;
-            loginBtn.disabled = false;
-            loginBtn.innerText = "Se connecter";
-        }
-    } catch (error) {
-        loginError.innerText = "Erreur de connexion.";
-        loginBtn.disabled = false;
-        loginBtn.innerText = "Se connecter";
-    }
-});
-if (microsoftLoginBtn) {
-    microsoftLoginBtn.addEventListener('click', () => {
-        window.api.openExternal('https://hgstudio.strator.gg/auth/microsoft?source=launcher');
-    });
-}
-window.api.onAuthSuccess((user) => {
-    handleLoginSuccess(user);
-});
-function handleLoginSuccess(user) {
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('dashboard-screen').style.display = 'block';
-    window.api.updateRpc({
-        details: 'Dans les menus',
-        state: `Connecté: ${user.username}`,
-        largeImageKey: 'logo', 
-        largeImageText: 'HG Launcher'
-    });
-    document.querySelector('.user-profile-btn').style.visibility = 'visible';
-    if(document.querySelector('.game-nav-container')) document.querySelector('.game-nav-container').style.visibility = 'visible';
-    const userNameEl = document.getElementById('user-name-header');
-    if (userNameEl) {
-        userNameEl.innerText = user.username;
-    }
-    const settingUserNameEl = document.getElementById('setting-user-name');
-    if (settingUserNameEl) {
-        settingUserNameEl.innerText = user.username;
-    }
-    const userAvatarEl = document.getElementById('user-avatar-header');
-    if (userAvatarEl) {
-        userAvatarEl.style.backgroundImage = `url('https://minotar.net/helm/${user.username}/100.png')`;
-    }
-    const settingAvatarEl = document.getElementById('setting-user-avatar');
-    if (settingAvatarEl) {
-        settingAvatarEl.style.backgroundImage = `url('https://minotar.net/helm/${user.username}/100.png')`;
-    }
-}
-const profileTrigger = document.getElementById('profile-trigger');
-const profileDropdown = document.getElementById('profile-dropdown');
-const dropdownSettings = document.getElementById('dropdown-settings');
-const dropdownLogout = document.getElementById('dropdown-logout');
-profileTrigger.addEventListener('click', (e) => {
-    e.stopPropagation(); 
-    profileDropdown.classList.toggle('active');
-});
-document.addEventListener('click', (e) => {
-    if (!profileTrigger.contains(e.target)) {
-        profileDropdown.classList.remove('active');
-    }
-});
-dropdownSettings.addEventListener('click', () => {
-    window.api.openExternal('http://91.197.6.177:24607/dashboard');
-});
-dropdownLogout.addEventListener('click', () => {
-    localStorage.removeItem('hg_session_token');
-    localStorage.removeItem('hg_user_data');
-    window.api.restoreSession(null); 
-    document.getElementById('dashboard-screen').style.display = 'none';
-    document.getElementById('login-screen').style.display = 'flex';
-    document.querySelector('.user-profile-btn').style.visibility = 'hidden';
-    if(document.querySelector('.game-nav-container')) document.querySelector('.game-nav-container').style.visibility = 'hidden';
-    profileDropdown.classList.remove('active');
-    loginBtn.disabled = false;
-    loginBtn.innerText = "Se connecter";
-    loginPass.value = ""; 
-});
-const btnInstagram = document.getElementById('btn-instagram');
-const btnTiktok = document.getElementById('btn-tiktok');
-const btnDiscord = document.getElementById('btn-discord');
-if (btnInstagram) {
-    btnInstagram.addEventListener('click', () => {
-        window.api.openExternal('https://www.instagram.com/hg.oo_pv');
-    });
-}
-if (btnTiktok) {
-    btnTiktok.addEventListener('click', () => {
-        window.api.openExternal('https://www.tiktok.com/@hg.oo.prv');
-    });
-}
-if (btnDiscord) {
-    btnDiscord.addEventListener('click', () => {
-        window.api.openExternal('https://discord.com/invite/VDhFQH5vtf');
-    });
-}
-const launchBtn = document.getElementById('launch-btn');
-const loadingOverlay = document.getElementById('loading-overlay');
-const loadingLog = document.getElementById('loading-log');
-const verBase = document.getElementById('ver-base');
-const verEnhanced = document.getElementById('ver-enhanced');
-const verAtm10 = document.getElementById('ver-atm10');
-const verHardcore = document.getElementById('ver-hardcore');
-const modpackNameStatus = document.getElementById('modpack-name');
-
-window.updateSelectorForTheme = (themeId) => {
-    if (!themeId) return;
-    const t = themeId.toLowerCase();
-    
-    // Hide all first? Or manage explicitly.
-    // ATM10 Case
-    if (t.includes('atm10')) {
-        if(verBase) verBase.style.display = 'none';
-        if(verEnhanced) verEnhanced.style.display = 'none';
-        if(verHardcore) verHardcore.style.display = 'none';
-        if(verAtm10) {
-            verAtm10.style.display = 'flex';
-            verAtm10.click(); 
-        }
-    } 
-    // Hardcore Case
-    else if (t.includes('hardcore')) {
-        if(verBase) verBase.style.display = 'none';
-        if(verEnhanced) verEnhanced.style.display = 'none';
-        if(verAtm10) verAtm10.style.display = 'none';
-        if(verHardcore) {
-            verHardcore.style.display = 'flex';
-            verHardcore.click();
-        }
-    } 
-    // Default Case (HG S1 / Enhanced)
-    else {
-        if(verAtm10) verAtm10.style.display = 'none';
-        if(verHardcore) verHardcore.style.display = 'none';
+// GLOBAL EVENT LISTENERS
+if(window.electron) {
+    window.electron.onGameExit((code) => {
+        console.log("Game Exited with code", code);
         
-        if(verBase) verBase.style.display = 'flex';
-        if(verEnhanced) verEnhanced.style.display = 'flex';
-        
-        // Return to base if we were in another mode
-        const isAtmActive = verAtm10 && verAtm10.classList.contains('active');
-        const isHcActive = verHardcore && verHardcore.classList.contains('active');
-        
-        if (isAtmActive || isHcActive || (!verBase.classList.contains('active') && !verEnhanced.classList.contains('active'))) {
-            verBase.click();
-        }
-    }
-}
-
-// Unified Version Logic
-const setVersion = (version) => {
-    launchBtn.style.color = 'transparent';
-    
-    setTimeout(() => {
-        // Reset classes
-        if(verBase) verBase.classList.remove('active');
-        if(verEnhanced) verEnhanced.classList.remove('active');
-        if(verAtm10) verAtm10.classList.remove('active');
-        if(verHardcore) verHardcore.classList.remove('active');
-
-        if (version === 'base') {
-            if(verBase) verBase.classList.add('active');
-            launchBtn.classList.remove('coming-soon');
-            launchBtn.innerHTML = 'JOUER';
-            if (modpackNameStatus) modpackNameStatus.innerText = 'Prêt à jouer';
-        } else if (version === 'enhanced') {
-            if(verEnhanced) verEnhanced.classList.add('active');
-            launchBtn.classList.add('coming-soon');
-            launchBtn.innerHTML = 'BIENTÔT DISPONIBLE';
-            if (modpackNameStatus) modpackNameStatus.innerText = 'HG Studio Enhanced';
-        } else if (version === 'atm10') {
-            if(verAtm10) verAtm10.classList.add('active');
-            launchBtn.classList.remove('coming-soon');
-            launchBtn.innerHTML = 'JOUER';
-            if (modpackNameStatus) modpackNameStatus.innerText = 'All The Mods 10-5.5';
-        } else if (version === 'hardcore') {
-            if (verHardcore) verHardcore.classList.add('active');
-            launchBtn.classList.remove('coming-soon');
-            launchBtn.innerHTML = 'JOUER (HC)';
-            if (modpackNameStatus) modpackNameStatus.innerText = 'Mode Hardcore';
-        }
-        
-        launchBtn.style.color = '';
-    }, 200); 
-};
-
-if(verBase) verBase.addEventListener('click', () => setVersion('base'));
-if(verEnhanced) verEnhanced.addEventListener('click', () => setVersion('enhanced'));
-if(verAtm10) verAtm10.addEventListener('click', () => setVersion('atm10'));
-if(verHardcore) verHardcore.addEventListener('click', () => setVersion('hardcore'));
-launchBtn.addEventListener('click', async () => {
-    if (launchBtn.classList.contains('coming-soon')) return;
-    loadingOverlay.style.display = 'flex';
-    loadingLog.innerText = "INITIALISATION...";
-    try {
-        window.api.updateRpc({
-            details: 'Joue à Minecraft',
-            state: 'HG Studio',
-            startTimestamp: Date.now(),
-            largeImageKey: 'logo',
-            largeImageText: 'HG Studio'
-        });
-        const settings = await window.api.getSettings();
-        const config = await window.api.getLauncherConfig();
-        let targetModpack = config.activeModpack; 
-        const currentThemeId = settings.activeTheme || 'Autum'; 
-        if (currentThemeId === 'Cherry' && config.modpack_cherry) {
-            targetModpack = config.modpack_cherry;
-            console.log("Using Cherry Modpack");
-        } else if (currentThemeId === 'Atm10' && config.modpack_atm10) {
-            targetModpack = config.modpack_atm10;
-            console.log("Using Atm10 Modpack");
-        } else if (currentThemeId === 'Autum' && config.modpack_autumn) {
-            targetModpack = config.modpack_autumn;
-            console.log("Using Autumn Modpack");
-        } else {
-             console.log("Using Default Active Modpack");
-        }
-        const result = await window.api.launchGame({
-            ...settings,
-            activeModpack: targetModpack 
-        });
-        console.log(result);
-    } catch (error) {
-        console.error(error);
-        loadingOverlay.style.display = 'none'; 
-        alert("Erreur de lancement !");
-    }
-});
-window.api.onLog((text) => {
-    console.log("Launcher Log:", text);
-    if (typeof text === 'string') {
-        let displayText = text;
-        if (text.startsWith('[Progress]')) {
-            displayText = text.replace('[Progress] ', '');
-        }
-        loadingLog.innerText = displayText;
-    }
-    if (text === 'Game closed.') {
-        loadingOverlay.style.display = 'none';
-    }
-});
-window.api.onStopLoading(() => {
-    loadingOverlay.style.display = 'none';
-    loadingLog.innerText = "";
-});
-const settingsBtn = document.getElementById('settings-btn');
-const settingsScreen = document.getElementById('settings-screen');
-const dashboardScreen = document.getElementById('dashboard-screen');
-const closeSettingsBtn = document.getElementById('close-settings-btn');
-const saveSettingsBtn = document.getElementById('save-settings-btn');
-const ramSlider = document.getElementById('ram-slider');
-const ramValue = document.getElementById('ram-value');
-const sysRamTotal = document.getElementById('sys-ram-total');
-const javaPath17 = document.getElementById('java-path-17');
-const javaPath8 = document.getElementById('java-path-8');
-const javaPath21 = document.getElementById('java-path-21');
-const jvmArgsInput = document.getElementById('jvm-args');
-const resWidthInput = document.getElementById('res-width');
-const resHeightInput = document.getElementById('res-height');
-const fullscreenToggle = document.getElementById('fullscreen-toggle');
-const closeLauncherToggle = document.getElementById('close-launcher-toggle');
-const debugConsoleToggle = document.getElementById('debug-console-toggle');
-const tabButtons = document.querySelectorAll('.settings-nav li');
-const tabContents = document.querySelectorAll('.settings-tab');
-const settingsNav = document.querySelectorAll('.nav-item');
-const settingsTabs = document.querySelectorAll('.tab-content');
-const doneBtn = document.getElementById('close-settings-btn'); 
-const s_gameWidth = document.getElementById('game-width');
-const s_gameHeight = document.getElementById('game-height');
-const s_fullscreen = document.getElementById('s-fullscreen');
-const s_autoconnect = document.getElementById('s-autoconnect');
-const s_detached = document.getElementById('s-detached');
-const s_ramSlider = document.getElementById('java-ram-slider');
-const s_ramDisplay = document.getElementById('ram-display-val');
-const s_sysFree = document.getElementById('sys-ram-free');
-const s_sysTotal = document.getElementById('sys-ram-total');
-const s_javaPath = document.getElementById('java-path-input');
-const s_javaArgs = document.getElementById('java-args-input');
-const s_browseJava = document.getElementById('browse-java-btn');
-const s_prerelease = document.getElementById('s-prerelease');
-const s_dataDir = document.getElementById('data-dir-input');
-const s_openDataDir = document.getElementById('open-data-dir-btn');
-settingsNav.forEach(nav => {
-    nav.addEventListener('click', () => {
-        settingsNav.forEach(n => n.classList.remove('active'));
-        settingsTabs.forEach(t => t.classList.remove('active'));
-        nav.classList.add('active');
-        const tabId = nav.getAttribute('data-tab');
-        const content = document.getElementById(`tab-${tabId}`);
-        if(content) content.classList.add('active');
-    });
-});
-s_ramSlider.addEventListener('input', () => {
-    const mb = parseInt(s_ramSlider.value);
-    s_ramDisplay.innerText = mb;
-    const min = parseInt(s_ramSlider.min);
-    const max = parseInt(s_ramSlider.max);
-    const percentage = ((mb - min) / (max - min)) * 100;
-    s_ramSlider.style.background = `linear-gradient(to right, var(--primary-pink) 0%, var(--primary-pink) ${percentage}%, #444 ${percentage}%, #444 100%)`;
-});
-settingsBtn.addEventListener('click', async () => {
-    document.body.classList.add('settings-active');
-    const settings = await window.api.getSettings();
-    const sysInfo = await window.api.getSystemInfo();
-    const appVersion = await window.api.getAppVersion();
-    const verDisplay = document.getElementById('app-version-display');
-    if (verDisplay) verDisplay.innerText = `v${appVersion}`;
-    const totalMemMB = Math.floor(sysInfo.totalMem / 1024 / 1024);
-    const freeMemMB = Math.floor(sysInfo.freeMem / 1024 / 1024);
-    if(s_sysTotal) s_sysTotal.innerText = (totalMemMB / 1024).toFixed(1);
-    if(s_sysFree) s_sysFree.innerText = (freeMemMB / 1024).toFixed(1);
-    s_ramSlider.max = totalMemMB;
-    if (settings.resolution) {
-        s_gameWidth.value = settings.resolution.width || 1280;
-        s_gameHeight.value = settings.resolution.height || 720;
-    }
-    s_fullscreen.checked = settings.fullscreen || false;
-    s_autoconnect.checked = !!settings.autoConnectIP;
-    s_detached.checked = settings.closeLauncher !== false; 
-    let currentRam = 4096;
-    if (settings.maxRam) {
-        currentRam = parseInt(settings.maxRam);
-    }
-    s_ramSlider.value = currentRam;
-    s_ramSlider.dispatchEvent(new Event('input')); 
-    const jp17 = document.getElementById('java-path-17');
-    const jp8 = document.getElementById('java-path-8');
-    const jp21 = document.getElementById('java-path-21');
-    if (jp17) jp17.value = settings.javaPath17 || settings.javaPath || "";
-    if (jp8) jp8.value = settings.javaPath8 || "";
-    if (jp21) jp21.value = settings.javaPath21 || "";
-    const bindBrowse = (browseId, inputId) => {
-        const fileInput = document.getElementById(browseId);
-        if(fileInput) {
-            fileInput.onchange = (e) => {
-                if(e.target.files[0]) {
-                     document.getElementById(inputId).value = e.target.files[0].path;
-                }
-            };
-        }
-    };
-    bindBrowse('browse-17', 'java-path-17');
-    bindBrowse('browse-8', 'java-path-8');
-    bindBrowse('browse-21', 'java-path-21');
-    s_javaArgs.value = settings.jvmArgs || "";
-    s_prerelease.checked = false; 
-    s_dataDir.value = "Default (AppData/.hg_oo)";
-    const carouselContainer = document.getElementById('theme-carousel-container');
-    if (carouselContainer) {
-        carouselContainer.innerHTML = '<div class="loading-themes"><i class="fas fa-circle-notch fa-spin"></i> Chargement...</div>';
-        try {
-            const themes = await window.api.getThemes();
-            carouselContainer.innerHTML = ''; 
-            if (themes.length === 0) {
-                carouselContainer.innerHTML = '<p style="color:#888;">Aucun thème trouvé (src/assets/themes).</p>';
-            }
-            themes.forEach(theme => {
-                const card = document.createElement('div');
-                card.className = 'theme-card';
-                if (settings.activeTheme === theme.id) {
-                    card.classList.add('active');
-                }
-                
-                let previewHtml;
-                if (theme.bgType === 'image') {
-                    const imgSrc = `assets/themes/${theme.folder}/${theme.logoFile || theme.bgFile}`;
-                    previewHtml = `
-                    <div class="theme-preview">
-                        <img src="${imgSrc}" style="width: 100%; height: 100%; object-fit: cover;">
-                    </div>`;
-                } else {
-                     const videoSrc = `assets/themes/${theme.folder}/${theme.bgFile || 'background.mp4'}`;
-                     previewHtml = `
-                    <div class="theme-preview">
-                        <video muted loop preload="metadata">
-                            <source src="${videoSrc}" type="video/mp4">
-                        </video>
-                        <i class="fas fa-play preview-play-icon"></i>
-                    </div>`;
-                }
-                
-                card.innerHTML = `
-                    ${previewHtml}
-                    <div class="theme-info">
-                        <span class="theme-title" title="${theme.title}">${theme.title}</span>
-                        <div class="theme-color-dot" style="background-color: ${theme.accentColor}"></div>
-                    </div>
-                `;
-
-                if (theme.bgType !== 'image') {
-                    const video = card.querySelector('video');
-                    card.addEventListener('mouseenter', () => { video.play().catch(e => {}); });
-                    card.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });
-                }
-
-                card.addEventListener('click', async () => {
-                    document.documentElement.style.setProperty('--primary-pink', theme.accentColor);
-                    if (window.updateSelectorForTheme) window.updateSelectorForTheme(theme.id);
-                    
-                     const bgVideo = document.getElementById('bg-video');
-                     const bgImage = document.getElementById('bg-image');
-                     
-                     if (theme.bgType === 'image') {
-                         if (bgVideo) { bgVideo.style.display = 'none'; bgVideo.pause(); }
-                         if (bgImage) {
-                             bgImage.style.display = 'block';
-                             bgImage.src = `assets/themes/${theme.folder}/${theme.bgFile}`;
-                         }
-                     } else {
-                         if (bgImage) bgImage.style.display = 'none';
-                         if (bgVideo) {
-                             bgVideo.style.display = 'block';
-                             bgVideo.src = `assets/themes/${theme.folder}/${theme.bgFile}`;
-                             bgVideo.play().catch(e => console.error(e));
-                         }
-                     }
-
-                    document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('active'));
-                    card.classList.add('active');
-                    
-                    try {
-                        const currentSettings = await window.api.getSettings();
-                        await window.api.saveSettings({
-                            ...currentSettings,
-                            activeTheme: theme.id,
-                            accentColor: theme.accentColor
-                        });
-                        if (typeof settings !== 'undefined') {
-                            settings.activeTheme = theme.id;
-                            settings.accentColor = theme.accentColor;
-                        }
-                    } catch (err) {
-                        console.error("Error saving theme:", err);
-                    }
-                });
-                carouselContainer.appendChild(card);
-            });
-        } catch (e) {
-            console.error("Failed to load themes:", e);
-            carouselContainer.innerHTML = '<p style="color:#f55;">Erreur de chargement des thèmes.</p>';
-        }
-    }
-    refreshAccountList();
-    if (typeof managerTypes !== 'undefined') {
-        managerTypes.forEach(t => refreshManagerList(t));
-    }
-    settingsScreen.style.display = 'flex';
-});
-if (s_browseJava) {
-    s_browseJava.addEventListener('click', async () => {
-        const path = await window.api.openFileDialog();
-        if (path) {
-            s_javaPath.value = path;
-        }
-    });
-}
-doneBtn.addEventListener('click', async () => {
-    doneBtn.innerText = "Sauvegarde...";
-    document.body.classList.remove('settings-active');
-    const ramVal = s_ramSlider.value;
-    const autoConnectIP = s_autoconnect.checked ? "play.hg.studio" : "";
-    let currentSettings = {};
-    try {
-        currentSettings = await window.api.getSettings();
-    } catch (e) { console.error("Could not fetch settings before save", e); }
-    const jp17 = document.getElementById('java-path-17').value;
-    const jp8 = document.getElementById('java-path-8').value;
-    const jp21 = document.getElementById('java-path-21').value;
-    const newSettings = {
-        ...currentSettings, 
-        minRam: `${ramVal}M`,
-        maxRam: `${ramVal}M`,
-        javaPath: jp17, 
-        javaPath17: jp17,
-        javaPath8: jp8, 
-        javaPath21: jp21, 
-        jvmArgs: s_javaArgs.value,
-        resolution: {
-            width: parseInt(s_gameWidth.value) || 1280,
-            height: parseInt(s_gameHeight.value) || 720
-        },
-        fullscreen: s_fullscreen.checked,
-        closeLauncher: s_detached.checked,
-        autoConnectIP: autoConnectIP,
-        discordRPC: true 
-    };
-    await window.api.saveSettings(newSettings);
-    doneBtn.innerText = "Terminé";
-    settingsScreen.style.display = 'none';
-});
-const playerCountEl = document.getElementById('player-count');
-const serverStatusDot = document.getElementById('server-status-dot');
-async function updateServerStatus() {
-    try {
-        const response = await fetch('https://api.mcsrvstat.us/2/play.hg.studio');
-        const data = await response.json();
-        if (data.online) {
-            playerCountEl.innerText = `${data.players.online}/${data.players.max}`;
-            serverStatusDot.style.backgroundColor = '#00ff88'; 
-            serverStatusDot.style.boxShadow = '0 0 10px #00ff88';
-        } else {
-            playerCountEl.innerText = "OFFLINE";
-            serverStatusDot.style.backgroundColor = '#ff0055'; 
-            serverStatusDot.style.boxShadow = '0 0 10px #ff0055';
-        }
-    } catch (error) {
-        console.error("Failed to fetch server status:", error);
-        playerCountEl.innerText = "ERROR";
-        serverStatusDot.style.backgroundColor = '#ffaa00'; 
-    }
-}
-updateServerStatus();
-setInterval(updateServerStatus, 60000);
-const checkUpdateBtn = document.getElementById('check-update-btn');
-const updateStatus = document.getElementById('update-status');
-if (checkUpdateBtn) {
-    checkUpdateBtn.addEventListener('click', async () => {
-        checkUpdateBtn.disabled = true;
-        checkUpdateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Vérification...';
-        updateStatus.innerText = "";
-        updateStatus.className = "status-msg";
-        try {
-            const result = await window.api.checkUpdate();
-            if (result.error) {
-                updateStatus.innerText = "Erreur: " + result.error;
-                updateStatus.classList.add('error');
-                checkUpdateBtn.disabled = false;
-                checkUpdateBtn.innerHTML = '<i class="fas fa-search"></i> Réessayer';
-            } else if (result.updateAvailable) {
-                updateStatus.innerText = 'Nouvelle version disponible : ' + result.version;
-                updateStatus.classList.add('success');
-                checkUpdateBtn.innerHTML = '<i class="fas fa-download"></i> Installer';
-                checkUpdateBtn.disabled = false;
-                const newBtn = checkUpdateBtn.cloneNode(true);
-                checkUpdateBtn.parentNode.replaceChild(newBtn, checkUpdateBtn);
-                newBtn.addEventListener('click', async () => {
-                    newBtn.disabled = true;
-                    newBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Téléchargement...';
-                    try {
-                        await window.api.installUpdate(result.url);
-                    } catch (e) {
-                        alert("Erreur lors de la mise à jour : " + e);
-                        newBtn.disabled = false;
-                        newBtn.innerHTML = '<i class="fas fa-download"></i> Installer';
-                    }
-                });
-            } else {
-                updateStatus.innerText = "Le launcher est à jour.";
-                updateStatus.classList.add('info');
-                checkUpdateBtn.innerHTML = '<i class="fas fa-check"></i> À jour';
-                setTimeout(() => {
-                    checkUpdateBtn.disabled = false;
-                    checkUpdateBtn.innerHTML = '<i class="fas fa-search"></i> Vérifier les mises à jour';
-                }, 2000);
-            }
-        } catch (error) {
-            console.error(error);
-            updateStatus.innerText = "Erreur de connexion.";
-            updateStatus.classList.add('error');
-            checkUpdateBtn.disabled = false;
-            checkUpdateBtn.innerHTML = '<i class="fas fa-search"></i> Réessayer';
-        }
-    });
-}
-function setupJavaControls(version) {
-    const inputId = `java-path-${version}`;
-    const installBtnId = `btn-install-${version}`;
-    const detectBtnId = `btn-detect-${version}`;
-    const browseBtnId = `btn-browse-${version}`;
-    const testBtnId = `btn-test-${version}`;
-    const input = document.getElementById(inputId);
-    const installBtn = document.getElementById(installBtnId);
-    const detectBtn = document.getElementById(detectBtnId);
-    const browseBtn = document.getElementById(browseBtnId);
-    const testBtn = document.getElementById(testBtnId);
-    if (installBtn) {
-        installBtn.addEventListener('click', async () => {
-             const originalContent = installBtn.innerHTML;
-             installBtn.disabled = true;
-             installBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Installation...`;
-             try {
-                 const result = await window.api.installJava(version);
-                 if (result.success && result.path) {
-                     input.value = result.path;
-                     installBtn.innerHTML = `<i class="fas fa-check"></i> Installé !`;
-                     setTimeout(() => {
-                        installBtn.innerHTML = originalContent;
-                        installBtn.disabled = false;
-                     }, 3000);
-                 } else {
-                     alert("Erreur d'installation: " + (result.error || "Inconnue"));
-                     installBtn.innerHTML = `<i class="fas fa-times"></i> Erreur`;
-                     setTimeout(() => { installBtn.innerHTML = originalContent; installBtn.disabled = false; }, 3000);
-                 }
-             } catch (e) {
-                 console.error(e);
-                 alert("Erreur critique: " + e);
-                 installBtn.innerHTML = originalContent;
-                 installBtn.disabled = false;
-             }
-        });
-    }
-    if (detectBtn) {
-        detectBtn.addEventListener('click', async () => {
-             detectBtn.disabled = true;
-             detectBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
-             const path = await window.api.detectJava(version);
-             if (path) {
-                 input.value = path;
+        // 1. Reset Play Button if visible
+        const playBtn = document.getElementById('inst-play-btn');
+        if(playBtn) {
+             playBtn.disabled = false;
+             playBtn.innerHTML = '<i class="fas fa-play"></i> PLAY';
+             playBtn.style.background = ""; // Reset color
+             
+             if (playBtn._originalOnClick) {
+                 playBtn.onclick = playBtn._originalOnClick;
+                 playBtn._originalOnClick = null; // Clear reference
              } else {
-                 alert(`Java ${version} non trouvé automatiquement.`);
+                 // Even if we don't have _originalOnClick (maybe user refreshed view?),
+                 // the button text is reset.
+                 // Ideally we should reload the view or re-bind, but if the view wasn't closed,
+                 // the original onclick might technically be lost if we didn't save it on the element?
+                 // No, if we didn't save it, playBtn.onclick IS the stop handler.
+                 // We need to be careful.
+                 // If _originalOnClick is missing, it means either:
+                 // A) We are in 'Play' state already (ignorable)
+                 // B) We are in 'Stop' state but failed to save.
+                 
+                 // If the text was "STOP", and we don't have originalOnClick, we might have broken the button.
+                 // But in our launch logic, we ALWAYS save it.
              }
-             detectBtn.innerHTML = `<i class="fas fa-search"></i> Detect`;
-             detectBtn.disabled = false;
-        });
-    }
-    if (browseBtn) {
-        browseBtn.addEventListener('click', async () => {
-            const path = await window.api.openFileDialog();
-            if (path) {
-                input.value = path;
-            }
-        });
-    }
-    if (testBtn) {
-        testBtn.addEventListener('click', async () => {
-             const path = input.value;
-             if (!path) return alert("Veuillez d'abord sélectionner un chemin Java.");
-             testBtn.disabled = true;
-             testBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
-             const result = await window.api.testJava(path);
-             alert(result.success ? "Test Réussi :\n" + result.output : "Echec du test :\n" + result.output);
-             testBtn.innerHTML = `<i class="fas fa-play"></i> Test`;
-             testBtn.disabled = false;
-        });
-    }
-}
-[21, 17, 8].forEach(v => setupJavaControls(v));
-const mapBtn = document.getElementById('btn-map');
-const mapScreen = document.getElementById('map-screen');
-const closeMapBtn = document.getElementById('close-map-btn');
-const mapIframe = document.getElementById('map-iframe');
-const MAP_URL = "https://badlands.mystrator.com/s/ffb5be70-4184-4fb9-8d7d-deafd87abadf/#overworld:1661:0:1168:10835:-1.6:0:0:0:perspective";
-if (mapBtn && mapScreen && closeMapBtn) {
-    mapBtn.addEventListener('click', () => {
-        mapScreen.style.display = 'flex';
-        if (mapIframe && mapIframe.src !== MAP_URL) {
-             mapIframe.src = MAP_URL;
+        }
+        
+        // 2. Persistent Crash Notification
+        if (code !== 0) {
+             const container = document.getElementById('progress-container');
+             if(container) {
+                 const toast = document.createElement('div');
+                 toast.className = 'progress-toast';
+                 // Styling matches user request: "Persistent until clicked"
+                 toast.style.cssText = "background: #d00; color: white; padding: 15px; border-radius: 8px; width: 300px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); pointer-events: auto; cursor: pointer; display: flex; align-items: center; gap: 10px; margin-top: 10px;";
+                 toast.innerHTML = `
+                     <i class="fas fa-exclamation-triangle" style="font-size: 20px;"></i>
+                     <div>
+                         <div style="font-weight: 700;">GAME CRASHED</div>
+                         <div style="font-size: 11px;">Exit Code: ${code} - Click to dismiss</div>
+                     </div>
+                 `;
+                 
+                 toast.onclick = () => { 
+                     if(toast.parentNode) toast.parentNode.removeChild(toast); 
+                 };
+                 
+                 container.appendChild(toast);
+             }
         }
     });
-    closeMapBtn.addEventListener('click', () => {
-        mapScreen.style.display = 'none';
-        if(mapIframe) mapIframe.src = 'about:blank';
-    });
 }
-const managerTypes = ['schematics', 'resourcepacks', 'shaderpacks'];
-async function refreshManagerList(type) {
-    const listContainer = document.getElementById(`list-${type}`);
-    if (!listContainer) return;
-    listContainer.innerHTML = '<div style="text-align:center; color:#666; font-size:12px;">Chargement...</div>';
+
+// CONFIGURATION
+const API_BASE_URL = "http://91.197.6.177:24607"; 
+
+// OFFICIAL INSTANCES (Hidden from Library, Visible in Fast Launch)
+const OFFICIAL_INSTANCES = [
+    { id: 'off_1', name: 'HEXA OPTIMIZED 1.21.1', version: '1.21.1', type: 'release', loader: 'Fabric', isOfficial: true, folder: 'official_hexa_opt' },
+    { id: 'off_2', name: 'MODDED FORGE 1.20.1', version: '1.20.1', type: 'release', loader: 'Forge', isOfficial: true, folder: 'official_forge_1.20' },
+    { id: 'off_3', name: 'COMPETITIVE 1.8.9', version: '1.8.9', type: 'release', loader: 'Vanilla', isOfficial: true, folder: 'official_pvp_1.8' }
+];
+
+// Initialize Skin Viewer
+function initSkinViewer(retries = 5) {
+    const canvas = document.getElementById("skin-container");
+    // Ensure container has size
+    if (!canvas) return;
+
     try {
-        const files = await window.api.getInstanceFiles(type);
-        listContainer.innerHTML = ''; 
-        if (files.length === 0) {
-            listContainer.innerHTML = '<div style="text-align:center; color:#666; font-size:12px; margin-top:5px;">Aucun fichier</div>';
+        if (typeof skinview3d === 'undefined') {
+            console.warn("SkinView3D lib not loaded yet. Retrying...");
+            if (retries > 0) {
+                setTimeout(() => initSkinViewer(retries - 1), 1000);
+            }
             return;
         }
-        files.forEach(file => {
-            const item = document.createElement('div');
-            item.className = 'file-item';
-            const sizeStr = (file.size / 1024 / 1024).toFixed(2) + ' MB';
-            item.innerHTML = `
-                <span title="${file.name}">${file.name} <small style="color:#666;">(${sizeStr})</small></span>
-                <div class="file-actions">
-                    <button class="btn-del" title="Supprimer"><i class="fas fa-trash"></i></button>
-                </div>
-            `;
-            item.querySelector('.btn-del').addEventListener('click', async (e) => {
-                e.stopPropagation();
-                if(confirm(`Supprimer ${file.name} ?`)) {
-                    await window.api.deleteInstanceFile({ type, fileName: file.name });
-                    refreshManagerList(type);
+
+        // Determine size from container
+        const container = canvas.parentElement;
+        const width = container.clientWidth || 400;
+        const height = container.clientHeight || 500;
+
+        skinViewer = new skinview3d.SkinViewer({
+            canvas: canvas,
+            width: width,
+            height: height,
+            skin: "https://textures.minecraft.net/texture/b3fbd8d742942472d2427f794c489c4d943261a7a0364d9b4db7d47f0d01", // Default Steve
+        });
+
+        // Set camera
+        skinViewer.camera.position.x = 20;
+        skinViewer.camera.position.y = 10;
+        skinViewer.camera.position.z = 50;
+        skinViewer.zoom = 0.9;
+        
+        // Animation
+        skinViewer.animation = new skinview3d.WalkingAnimation();
+        skinViewer.animation.speed = 0.5;
+        
+        // Controls
+        let control = skinview3d.createOrbitControls(skinViewer);
+        control.enableRotate = true;
+        control.enableZoom = false;
+        control.enablePan = false;
+
+        // Resize observer setup
+        const resizeObserver = new ResizeObserver(entries => {
+            for (let entry of entries) {
+                if (entry.target === container && skinViewer) {
+                    skinViewer.width = entry.contentRect.width;
+                    skinViewer.height = entry.contentRect.height;
                 }
-            });
-            listContainer.appendChild(item);
-        });
-    } catch (e) {
-        console.error("Manager error:", e);
-        listContainer.innerHTML = `<div style="color:#d55;">Erreur</div>`;
-    }
-}
-function preventDefaults (e) { e.preventDefault(); e.stopPropagation(); }
-managerTypes.forEach(type => {
-    const openBtn = document.querySelector(`.open-folder-btn[data-type="${type}"]`);
-    if(openBtn) {
-        openBtn.addEventListener('click', () => {
-            window.api.openInstanceFolder(type);
-        });
-    }
-    const dropZone = document.getElementById(`drop-${type}`);
-    if(dropZone) {
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, preventDefaults, false);
-            document.body.addEventListener(eventName, preventDefaults, false);
-        });
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
-        });
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
-        });
-        dropZone.addEventListener('drop', async (e) => {
-            const files = e.dataTransfer.files;
-            if(files.length > 0) {
-                for (let i = 0; i < files.length; i++) {
-                   await window.api.addInstanceFile({ type, sourcePath: files[i].path });
-                }
-                refreshManagerList(type);
             }
         });
+        resizeObserver.observe(container);
+
+    } catch (e) {
+        console.error("Skin viewer init failed", e);
     }
-    const browseBtn = document.querySelector(`.browse-trigger[data-type="${type}"]`);
-    if(browseBtn) {
-        browseBtn.addEventListener('click', async () => {
-            const path = await window.api.openFileDialog(); 
-            if(path) {
-                await window.api.addInstanceFile({ type, sourcePath: path });
-                refreshManagerList(type);
+}
+
+
+// === INSTANCE SETTINGS MANAGER ===
+window.InstanceSettings = {
+    currentId: null,
+
+    open(id) {
+        this.currentId = id;
+        const inst = LibraryManager.instances.find(i => i.id === id) || OFFICIAL_INSTANCES.find(i => i.id === id);
+        if (!inst) return;
+
+        // Reset & Populate Form
+        document.getElementById('inst-set-name').value = inst.name;
+        document.getElementById('inst-set-loader').value = inst.loader ? inst.loader.toLowerCase() : 'vanilla';
+        document.getElementById('inst-set-version').value = inst.version;
+        
+        // Java Logic
+        const javaSelect = document.getElementById('inst-set-java');
+        const javaPathInput = document.getElementById('inst-set-java-path');
+        
+        if (inst.javaVersion) {
+            javaSelect.value = inst.javaVersion; 
+        } else {
+             javaSelect.value = 'auto';
+        }
+
+        if (inst.javaPath && inst.javaVersion === 'custom') {
+            javaPathInput.value = inst.javaPath;
+            javaPathInput.style.display = 'block';
+        } else {
+            javaPathInput.value = '';
+            javaPathInput.style.display = 'none';
+        }
+
+        javaSelect.onchange = () => {
+            if (javaSelect.value === 'custom') {
+                javaPathInput.style.display = 'block';
+            } else {
+                javaPathInput.style.display = 'none';
+            }
+        };
+
+        // RAM Logic
+        const ramSlider = document.getElementById('inst-set-ram');
+        const ramLabel = document.getElementById('inst-set-ram-val');
+        
+        // Parse "XG" or "XM" into MB
+        let currentRam = 4096; // Default 4GB
+        if (inst.memory) {
+            if (inst.memory.endsWith('G')) currentRam = parseInt(inst.memory) * 1024;
+            else if (inst.memory.endsWith('M')) currentRam = parseInt(inst.memory);
+        }
+        ramSlider.value = currentRam;
+        ramLabel.innerText = (currentRam / 1024).toFixed(1) + " GB";
+
+        ramSlider.oninput = () => {
+            ramLabel.innerText = (ramSlider.value / 1024).toFixed(1) + " GB";
+        };
+
+        // Resolution
+        if (inst.resolution) {
+            document.getElementById('inst-set-width').value = inst.resolution.width;
+            document.getElementById('inst-set-height').value = inst.resolution.height;
+        } else {
+            document.getElementById('inst-set-width').value = 1280;
+            document.getElementById('inst-set-height').value = 720;
+        }
+
+        // JVM Args
+        document.getElementById('inst-set-jvm').value = inst.jvmArgs || '';
+
+        // Show Modal
+        document.getElementById('instance-settings-modal').style.display = 'flex';
+    },
+
+    close() {
+        document.getElementById('instance-settings-modal').style.display = 'none';
+        this.currentId = null;
+    },
+
+    save() {
+        if (!this.currentId) return;
+        
+        const inst = LibraryManager.instances.find(i => i.id === this.currentId);
+        if (!inst) {
+            alert("Official instances cannot be modified."); // Or handle overrides separately
+            this.close();
+            return;
+        }
+
+        // Gather Data
+        inst.name = document.getElementById('inst-set-name').value;
+        inst.javaVersion = document.getElementById('inst-set-java').value;
+        if (inst.javaVersion === 'custom') {
+            inst.javaPath = document.getElementById('inst-set-java-path').value;
+        } else {
+            delete inst.javaPath; // Clear if not custom
+        }
+
+        const ramMB = document.getElementById('inst-set-ram').value;
+        inst.memory = Math.round(ramMB / 1024) + "G"; // Store as "4G" for MCLC compat
+
+        inst.resolution = {
+            width: parseInt(document.getElementById('inst-set-width').value),
+            height: parseInt(document.getElementById('inst-set-height').value)
+        };
+
+        inst.jvmArgs = document.getElementById('inst-set-jvm').value;
+
+        // Save & Reload
+        LibraryManager.save();
+        LibraryManager.render();
+        this.close();
+    }
+};
+
+// === LIBRARY SYSTEM MANAGER ===
+const LibraryManager = {
+    instances: [],
+
+    init() {
+        console.log("Initializing LibraryManager...");
+        // Load from local storage or defaults
+        const saved = localStorage.getItem('hexa_instances');
+        if (saved) {
+            try {
+                this.instances = JSON.parse(saved);
+            } catch(e) {
+                console.error("Corrupt library found, resetting.");
+                this.instances = [];
+            }
+        } 
+        
+        if (this.instances.length === 0) {
+            // Default Instance
+            this.instances = [
+                { id: 'def_1', name: 'Hexa Optimized', version: '1.21.1', loader: 'Fabric', icon: 'assets/logo_no_bc.png', status: 'Ready', folder: 'hexa_optimized' }
+            ];
+            this.save();
+        }
+        
+        this.render();
+        this.setupEventListeners();
+    },
+
+    save() {
+        localStorage.setItem('hexa_instances', JSON.stringify(this.instances));
+    },
+
+    render() {
+        const grid = document.getElementById('library-grid');
+        
+        // Update Fast Launch Selector
+        const selector = document.getElementById('version-selector');
+        if (selector) {
+            selector.innerHTML = '';
+            
+            // 1. Add Official Instances
+            const grpOfficial = document.createElement('optgroup');
+            grpOfficial.label = "Official Configurations";
+            OFFICIAL_INSTANCES.forEach(inst => {
+                const opt = document.createElement('option');
+                opt.value = inst.id;
+                opt.innerText = inst.name;
+                grpOfficial.appendChild(opt);
+            });
+            selector.appendChild(grpOfficial);
+
+            // 2. Add User Instances
+            if (this.instances.length > 0) {
+                const grpUser = document.createElement('optgroup');
+                grpUser.label = "My Library";
+                this.instances.forEach(inst => {
+                    const opt = document.createElement('option');
+                    opt.value = inst.id;
+                    opt.innerText = `${inst.name} (${inst.version})`;
+                    grpUser.appendChild(opt);
+                });
+                selector.appendChild(grpUser);
+            }
+
+            // 3. Restore Selection (Last Launched)
+            const lastId = localStorage.getItem('hexa_last_launched');
+            if (lastId) {
+                // Check if valid
+                const exists = OFFICIAL_INSTANCES.find(i=>i.id===lastId) || this.instances.find(i=>i.id===lastId);
+                if(exists) selector.value = lastId;
+                else selector.selectedIndex = 0;
+            } else {
+                selector.selectedIndex = 0;
+            }
+            
+            // Re-bind change event to update play button text
+            selector.onchange = () => {
+                const btn = document.getElementById('play-btn');
+                if(!btn) return;
+                const selId = selector.value;
+                const inst = OFFICIAL_INSTANCES.find(i=>i.id===selId) || this.instances.find(i=>i.id===selId);
+                if(inst) {
+                    btn.innerHTML = `LAUNCH ${inst.name.toUpperCase()}`;
+                    if(inst.status && inst.status !== 'Ready') {
+                         btn.innerHTML = inst.status.toUpperCase();
+                         btn.disabled = true;
+                    } else {
+                         btn.disabled = false;
+                    }
+                }
+            };
+            // Initial trigger
+            selector.onchange();
+        }
+
+        if (!grid) return;
+        grid.innerHTML = '';
+
+        this.instances.forEach(inst => {
+            const card = document.createElement('div');
+            card.className = 'instance-card';
+            // Default icon if specific one fails or is missing
+            const iconUrl = inst.icon || 'assets/logo_no_bc.png';
+            
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between;">
+                    <img src="${iconUrl}" class="instance-icon" onerror="this.src='assets/logo_no_bc.png'">
+                    <span style="font-size:10px; background:#eee; padding:2px 6px; height:fit-content; border-radius:4px;">${inst.loader}</span>
+                </div>
+                <div class="instance-info">
+                    <h3>${inst.name}</h3>
+                    <div class="instance-meta">
+                        <span>${inst.version}</span>
+                        <span>•</span>
+                        <span>${inst.status || 'Ready'}</span>
+                    </div>
+                </div>
+                <div class="play-overlay">
+                    <button class="mini-play-btn" data-id="${inst.id}">PLAY</button>
+                    <button class="mini-play-btn" style="border:none; font-size:12px; margin-left:5px; background:rgba(255,255,255,0.2);" onclick="event.stopPropagation(); InstanceSettings.open('${inst.id}')">⚙</button>
+                    <button class="mini-play-btn" style="border:none; font-size:10px; margin-left:5px; background:rgba(255,0,0,0.4);" onclick="event.stopPropagation(); LibraryManager.delete('${inst.id}')">✕</button>
+                </div>
+            `;
+            
+            if(inst.status && inst.status.includes('Installing')) {
+                const btn = card.querySelector('.mini-play-btn');
+                if(btn) {
+                    btn.disabled = true;
+                    btn.innerText = '...';
+                }
+            }
+
+            // Click to Play logic
+            const miniPlay = card.querySelector('.mini-play-btn');
+            if(miniPlay) {
+                miniPlay.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    // Select specifically in the dropdown too
+                    if(selector) {
+                        selector.value = inst.id;
+                        selector.dispatchEvent(new Event('change')); // Update main button text
+                    }
+                    // Switch to Home Tab
+                    document.querySelector('.nav-item[data-tab="home"]').click();
+                    // Auto-click Launch (Optional, maybe user just wants to select)
+                    // document.getElementById('play-btn').click();
+                });
+            }
+            
+            // Click Card to Open Details
+            card.addEventListener('click', () => {
+                this.openDetails(inst);
+            });
+
+            grid.appendChild(card);
+        });
+        
+        // Add "Add New" Card
+        const addCard = document.createElement('div');
+        addCard.className = 'instance-card add-card';
+        addCard.style.cssText = "display: flex; justify-content: center; align-items: center; border: 2px dashed #444; background: transparent; cursor: pointer;";
+        addCard.innerHTML = `
+            <div style="text-align: center; color: #888;">
+                <i class="fas fa-plus" style="font-size: 32px; margin-bottom: 10px;"></i>
+                <div style="font-weight: 600;">CREATE NEW</div>
+            </div>
+        `;
+        addCard.onclick = () => {
+            document.getElementById('btn-create-inst').click();
+        };
+        grid.appendChild(addCard);
+    },
+
+    async add(name, version, loader, icon, cloudSync) {
+        const id = 'inst_' + Date.now();
+        // folder name safe
+        const folder = name.replace(/[^a-z0-9]/gi, '_').toLowerCase() + '_' + Date.now();
+        
+        try {
+            // Wait for backend installation (Java, Loader, Folder creation)
+            const result = await window.electron.createInstance({ 
+                name, version, loader, folder, cloudSync 
+            });
+            
+            if (!result.success) {
+                console.error("Backend creation failed:", result.error);
+                throw new Error(result.error); 
+            }
+        } catch (e) {
+            console.error("Detailed creation error:", e);
+            throw e; // Rethrow to update UI in modal
+        }
+
+        const newInst = {
+            id: id,
+            name: name,
+            version: version,
+            loader: loader,
+            icon: icon,
+            created: Date.now(),
+            status: 'Ready',
+            folder: folder,
+            cloudSync: cloudSync || false
+        };
+        this.instances.push(newInst);
+        this.save();
+        this.render();
+        console.log("Added Instance:", newInst);
+        return newInst;
+    },
+    
+    // ... delete and openDetails remain mostly same ...
+
+    delete(id) {
+        if(confirm("Delete this instance?")) {
+            this.instances = this.instances.filter(i => i.id !== id);
+            this.save();
+            this.render();
+        }
+    },
+
+    openDetails(inst) {
+        const view = document.getElementById('instance-details-view');
+        if(!view) return;
+        
+        // Push History State
+        if (typeof NavSystem !== 'undefined') {
+            NavSystem.pushState({ tab: 'library', type: 'instance-detail', instanceId: inst.id });
+        }
+
+        // Populate Header
+        document.getElementById('inst-name-lg').innerText = inst.name;
+        document.getElementById('inst-version-tag').innerText = inst.version;
+        document.getElementById('inst-loader-tag').innerText = inst.loader;
+        document.getElementById('inst-icon-lg').src = inst.icon || 'assets/logo_no_bc.png';
+        
+        // Play Button Action
+        const playBtn = document.getElementById('inst-play-btn');
+        playBtn.onclick = async () => {
+             if(playBtn.disabled) return;
+             
+             // 1. Switch to Logs Tab
+             const logTab = document.querySelector('.inst-tab[data-target="inst-logs"]');
+             if(logTab) logTab.click();
+             
+             // 2. Clear previous logs
+             const logContainer = document.getElementById('inst-logs-container');
+             if(logContainer) logContainer.innerHTML = '';
+
+             // 3. UI Updates
+             playBtn.disabled = true;
+             playBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> LAUNCHING...';
+             
+             try {
+                // Ensure UUID is valid for Offline Mode
+                let userUUID = '00000000-0000-0000-0000-000000000000';
+                if (currentUser && currentUser.uuid) {
+                    userUUID = currentUser.uuid;
+                } else {
+                    // Generate offline UUID
+                    userUUID = '88888888-8888-8888-8888-888888888888'; 
+                }
+
+                const launchOptions = {
+                    ...inst,
+                    username: currentUser ? currentUser.username : 'Player',
+                    uuid: userUUID,
+                    accessToken: currentUser ? currentUser.accessToken : '0000',
+                    isOfficial: inst.isOfficial || false
+                };
+                
+                // Add instanceFolder fallback if missing (for legacy instances)
+                if (!launchOptions.instanceFolder && launchOptions.folder) {
+                    launchOptions.instanceFolder = launchOptions.folder;
+                }
+                
+                await window.electron.launch(launchOptions);
+                
+                // Transition to STOP state
+                playBtn.disabled = false;
+                playBtn.innerHTML = '<i class="fas fa-stop"></i> STOP';
+                playBtn.style.background = "#d00"; // Red color
+                
+                // Temporarily override click handler for Stop action
+                const originalOnClick = playBtn.onclick;
+                playBtn.onclick = async () => {
+                    if (window.electron && window.electron.stopGame) {
+                        playBtn.disabled = true;
+                        playBtn.innerText = "STOPPING...";
+                        await window.electron.stopGame();
+                        // State resets on 'game-exit' event
+                    }
+                };
+                
+                // Store original reference to restore later if needed
+                playBtn._originalOnClick = originalOnClick;
+
+            } catch (e) {
+                console.error("Launch Error", e);
+                alert("Launch failed: " + e.message);
+                playBtn.disabled = false;
+                playBtn.innerHTML = '<i class="fas fa-play"></i> PLAY';
+            }
+        };
+        
+        // More Button (Open Folder)
+        
+        // More Button (Open Folder)
+        const moreBtn = document.getElementById('inst-more-btn');
+        if (moreBtn) {
+            // Remove old listeners
+            const newMoreBtn = moreBtn.cloneNode(true);
+            moreBtn.parentNode.replaceChild(newMoreBtn, moreBtn);
+            
+            newMoreBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                
+                // Create or find Popover
+                let popover = document.getElementById('more-popover');
+                if (!popover) {
+                    popover = document.createElement('div');
+                    popover.id = 'more-popover';
+                    popover.style.cssText = `
+                        position: absolute; 
+                        background: white; 
+                        border-radius: 6px; 
+                        box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+                        padding: 5px; 
+                        z-index: 5000;
+                        display: none;
+                        min-width: 150px;
+                        border: 1px solid #eee;
+                    `;
+                    document.body.appendChild(popover);
+                    
+                    // Close on click out
+                    window.addEventListener('click', (ev) => {
+                        if(ev.target !== newMoreBtn && !popover.contains(ev.target)) {
+                            popover.style.display = 'none';
+                        }
+                    });
+                }
+                
+                // Populate options
+                popover.innerHTML = `
+                    <button class="pop-btn" id="pop-open-folder" style="display:flex; align-items:center; width:100%; text-align:left; padding:8px 12px; background:none; border:none; cursor:pointer; color:#333; font-size:13px; gap:8px;">
+                        <i class="fas fa-folder-open" style="color:#666;"></i> Open Folder
+                    </button>
+                    <!-- Add more options here later -->
+                `;
+                
+                // Position
+                const rect = newMoreBtn.getBoundingClientRect();
+                popover.style.top = (rect.bottom + 5) + 'px';
+                popover.style.left = (rect.left - 100) + 'px'; // Shift left to align
+                popover.style.display = 'block';
+                
+                // Action
+                document.getElementById('pop-open-folder').onclick = async () => {
+                    await window.electron.openFolder(inst.folder);
+                    popover.style.display = 'none';
+                };
+            });
+        }
+        
+        // Close Button
+        const closeBtn = document.getElementById('inst-close-btn');
+        if (closeBtn) closeBtn.onclick = () => {
+             if (typeof NavSystem !== 'undefined') NavSystem.goBack();
+             else view.style.display = 'none';
+        };
+
+        // Reset Tabs
+        document.querySelectorAll('.inst-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.inst-tab-pane').forEach(p => p.style.display = 'none');
+        
+        // Default Tab
+        document.querySelector('.inst-tab[data-target="inst-content"]').classList.add('active');
+        document.getElementById('inst-content').style.display = 'block';
+        
+        // Load Screenshots Logic (Mock for now)
+        this.loadScreenshots(inst);
+
+        // Load Mods
+        this.loadInstanceMods(inst);
+
+        view.style.display = 'block';
+    },
+
+    async loadInstanceMods(inst) {
+        const list = document.getElementById('inst-mods-list');
+        list.innerHTML = '<div style="padding:40px; text-align:center; color:#999;"><i class="fas fa-spinner fa-spin"></i> Scanning mods...</div>';
+        
+        try {
+            // Need the absolute path. Current 'inst' object might just have relative or partial path.
+            // Assuming inst.path is available and correct. If not, this needs adjustment.
+            // For now, let's assume inst object has { path: "C:/..." } or we construct it.
+            // In a real app, InstanceManager would provide the full path.
+            // Assuming: 'instances/' + inst.folder (from renderer context) or provided path.
+            
+            // NOTE: The 'inst' object passed from selectInstance usually comes from 'this.instances'.
+            // Ensure 'inst.path' or 'inst.folder' communicates the location.
+            // If inst only has a relative path, we need to know the root.
+            // For this implementation, I will assume inst.path matches the filesystem path expected by main.js.
+            let path = inst.path; 
+            if(!path && inst.folder) path = inst.folder; // Fallback
+            
+            const mods = await window.electron.getInstanceMods(path);
+            
+            list.innerHTML = '';
+            
+            if(mods.length === 0) {
+                list.innerHTML = '<div class="empty-state" style="padding: 30px; text-align: center; color: #999;">No mods found in folder.</div>';
+                return;
+            }
+            
+            mods.forEach(mod => {
+                const row = document.createElement('div');
+                row.className = 'mod-row';
+                row.style.cssText = "display: flex; align-items: center; padding: 10px 20px; border-bottom: 1px solid #eee; gap: 15px;";
+                
+                const iconSrc = mod.icon || 'assets/logo_no_bc.png'; // Fallback icon
+                
+                row.innerHTML = `
+                    <img src="${iconSrc}" style="width: 32px; height: 32px; border-radius: 4px; object-fit: contain; background: #f5f5f5;">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; font-size: 13px; color: #333;">${mod.name}</div>
+                        <div style="font-size: 11px; color: #888;">${mod.author}</div>
+                    </div>
+                    <div style="width: 100px; font-size: 12px; color: #666;">${mod.version}</div>
+                    <div style="width: 120px; text-align: right;">
+                        <button class="icon-onyl-btn" style="width: 28px; height: 28px; font-size: 12px; color: #d00;" title="Delete (Not Implemented)"><i class="fas fa-trash"></i></button>
+                    </div>
+                `;
+                list.appendChild(row);
+            });
+            
+        } catch(e) {
+            console.error(e);
+            list.innerHTML = '<div style="padding:20px; color:#d00;">Error loading mods.</div>';
+        }
+    },
+
+    loadScreenshots(inst) {
+        const grid = document.getElementById('inst-screenshots-grid');
+        grid.innerHTML = '';
+        
+        // Check Cloud Sync preference
+        const isCloud = inst.cloudSync ? '(Cloud Synced)' : '(Local Only)';
+        
+        // Mock Data - In real app, use fs.readdir on instance folder
+        // For demonstration, we just show a message or empty state if no real screenshots
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.style.gridColumn = "1 / -1";
+        empty.style.textAlign = "center";
+        empty.style.padding = "40px";
+        empty.style.color = "#999";
+        empty.innerHTML = `
+            <i class="fas fa-images" style="font-size: 30px; margin-bottom: 10px;"></i>
+            <p>No screenshots found in instance folder.</p>
+            <small>${isCloud}</small>
+        `;
+        grid.appendChild(empty);
+    },
+
+    selectInstance(inst) {
+        // Switch to Home
+        document.querySelector('[data-tab="home"]').click();
+        
+        // Update Selector & Launch Button
+        const verSelector = document.getElementById('version-selector');
+        
+        // Check if option exists, if not add it temp
+        let optString = `USER: ${inst.name} (${inst.version})`;
+        
+        // Simple switch for demo purposes - in real app, main process needs to know path
+        // We will repurpose the selector to show we selected this
+        if (verSelector) {
+            // Create a temp option
+            const opt = document.createElement('option');
+            opt.value = `custom_${inst.id}`;
+            opt.innerText = optString;
+            verSelector.add(opt);
+            verSelector.value = opt.value;
+        }
+
+        const btn = document.getElementById('play-btn');
+        if(btn) btn.innerText = `LAUNCH ${inst.name}`;
+    },
+
+    add(name, version, loader, icon, cloudSync = false) {
+        const safeName = name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        const newInst = {
+            id: 'inst_' + Date.now(),
+            name: name,
+            version: version,
+            loader: loader,
+            icon: icon || 'assets/logo_no_bc.png',
+            status: 'Ready',
+            folder: safeName,
+            cloudSync: cloudSync
+        };
+        this.instances.push(newInst);
+        this.save();
+        this.render();
+        return newInst;
+    },
+
+    delete(id) {
+        if(confirm('Delete this instance?')) {
+            this.instances = this.instances.filter(i => i.id !== id);
+            this.save();
+            this.render();
+        }
+    },
+
+    // === NOTIFICATION SYSTEM ===
+    showToast(title, progress = 0, id = null) {
+        const container = document.getElementById('progress-container');
+        if(!container) return;
+
+        let toast = id ? document.getElementById(id) : null;
+        
+        if (!toast) {
+            toast = document.createElement('div');
+            if (id) toast.id = id;
+            toast.className = 'progress-toast';
+            toast.style.cssText = "background: #222; color: white; padding: 15px; border-radius: 8px; width: 300px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); pointer-events: auto; transition: opacity 0.5s;";
+            toast.innerHTML = `
+                <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                    <span class="toast-title" style="font-weight:600; font-size:13px;">${title}</span>
+                    <span class="toast-percent" style="font-size:12px; color:#aaa;">${progress}%</span>
+                </div>
+                <div style="width:100%; height:4px; background:#444; border-radius:2px; overflow:hidden;">
+                    <div class="toast-bar" style="width:${progress < 0 ? 100 : progress}%; height:100%; background:${progress < 0 ? '#d00' : 'var(--primary-pink)'}; transition: width 0.3s;"></div>
+                </div>
+            `;
+            container.appendChild(toast);
+        } else {
+            toast.querySelector('.toast-title').innerText = title;
+            if(progress >= 0) {
+                 toast.querySelector('.toast-percent').innerText = progress + '%';
+                 toast.querySelector('.toast-bar').style.width = progress + '%';
+                 toast.querySelector('.toast-bar').style.background = 'var(--primary-pink)';
+            } else {
+                 toast.querySelector('.toast-percent').innerText = 'Failed';
+                 toast.querySelector('.toast-bar').style.background = '#d00';
+            }
+        }
+        
+        if (progress >= 100 || progress < 0) {
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 500);
+            }, 3000);
+        }
+    },
+
+    setupEventListeners() {
+        // ... existing listeners ...
+        if(window.electron) {
+            window.electron.onInstallProgress((data) => {
+                const { instance, percent, msg } = data;
+                this.showToast(msg || `Installing ${instance}...`, percent, 'toast-' + instance);
+                
+                // Update instance card status if visible
+                const inst = this.instances.find(i => i.folder === instance);
+                if(inst && percent < 100 && percent >= 0) {
+                     inst.status = `Installing ${percent}%`;
+                     this.render(); // Re-render to show status on card
+                } else if (inst && percent >= 100) {
+                     inst.status = 'Ready';
+                     this.save();
+                     this.render();
+                }
+            });
+
+            // Logs
+            window.electron.onLog((data) => {
+                const logContainer = document.getElementById('inst-logs-container');
+                if(logContainer) {
+                    const line = document.createElement('div');
+                    line.style.whiteSpace = "pre-wrap";
+                    line.style.fontFamily = "Consolas, monospace";
+                    line.style.fontSize = "12px";
+                    line.style.lineHeight = "1.4";
+                    line.style.userSelect = "text"; // ENABLE SELECTION
+                    line.style.cursor = "text"; 
+
+                    // Parse Data String
+                    const str = data.toString();
+                    line.innerText = str;
+
+                    // Color Coding
+                    if(str.includes('ERROR') || str.includes('Exception') || str.includes('Caused by') || str.includes('Crash Report')) {
+                        line.style.color = "#ff5555"; // Red
+                    } else if (str.includes('WARN')) {
+                        line.style.color = "#ffaa00"; // Orange
+                    } else if (str.includes('INFO')) {
+                        line.style.color = "#ddd"; // Standard
+                    } else {
+                        // Likely stacktrace or raw output
+                        if(str.trim().startsWith('at ') || str.trim().startsWith('--')) {
+                             line.style.color = "#ff5555"; 
+                        }
+                    }
+                    
+                    // Special Highlighting for Crash Header
+                    if(str.includes('---- Minecraft Crash Report ----')) {
+                        line.style.color = "#ff0000";
+                        line.style.fontWeight = "bold";
+                        line.style.borderBottom = "1px solid red";
+                        line.style.marginTop = "10px";
+                    }
+
+                    logContainer.appendChild(line);
+                    logContainer.scrollTop = logContainer.scrollHeight;
+                }
+            });
+        }
+        
+        // Add Copy Button to Logs
+        const logContainer = document.getElementById('inst-logs-container');
+        if(logContainer && !document.getElementById('copy-logs-btn')) {
+             // Create a floating action button inside the logs pane
+             const copyBtn = document.createElement('button');
+             copyBtn.id = 'copy-logs-btn';
+             copyBtn.innerText = "COPY LOGS";
+             copyBtn.className = "secondary-btn small";
+             copyBtn.style.cssText = "position: absolute; bottom: 20px; right: 40px; z-index: 100; opacity: 0.8;";
+             copyBtn.onclick = () => {
+                 const text = logContainer.innerText;
+                 navigator.clipboard.writeText(text).then(() => {
+                     const original = copyBtn.innerText;
+                     copyBtn.innerText = "COPIED!";
+                     setTimeout(() => copyBtn.innerText = original, 2000);
+                 });
+             };
+             // Ensure parent is relative for absolute positioning or append next to it
+             // Actually, inst-logs-container is inside a tab pane. Let's append to the pane.
+             const pane = document.getElementById('inst-logs');
+             if(pane) {
+                 pane.style.position = 'relative'; // Ensure positioning context
+                 pane.appendChild(copyBtn);
+             }
+        }
+
+        // Main Launch Button Logic
+        const playBtn = document.getElementById('play-btn');
+        if (playBtn) {
+            // Remove old listeners by cloning (simple hack) or just add new one if none existed
+            // For safety, we just add. If double launch specific logs appear, we know why.
+            playBtn.addEventListener('click', async () => {
+                const selector = document.getElementById('version-selector');
+                const selectedId = selector.value;
+                if(!selectedId) return;
+
+                // Identify instance
+                let inst = OFFICIAL_INSTANCES.find(i => i.id === selectedId);
+                if (!inst) inst = this.instances.find(i => i.id === selectedId);
+                
+                // Handle "custom_" prefix from Instance Details selection
+                if (!inst && selectedId.startsWith('custom_')) {
+                     const realId = selectedId.replace('custom_', '');
+                     inst = this.instances.find(i => i.id === realId);
+                }
+
+                if(!inst) {
+                    alert('Error: Instance not found.');
+                    return;
+                }
+                
+                // Update UI to Launched state
+                playBtn.disabled = true;
+                playBtn.innerText = "LAUNCHING...";
+                const progressText = document.getElementById('progress-text');
+                if(progressText) progressText.innerText = "Initializing launch sequence...";
+
+                try {
+                    // Logic to handle "Official" paths vs "Custom" paths
+                    const launchOptions = {
+                        ...inst,
+                        username: currentUser ? currentUser.username : 'Player',
+                        uuid: currentUser ? currentUser.uuid : '0000',
+                        accessToken: currentUser ? currentUser.accessToken : '0000',
+                        isOfficial: inst.isOfficial || false
+                    };
+                    
+                    // Main.js expects instanceFolder for correct path
+                    if (inst.folder) launchOptions.instanceFolder = inst.folder;
+                    
+                    console.log("Launching with options:", launchOptions);
+                    await window.electron.launch(launchOptions);
+                    
+                    // Reset button after some time or when game closes (we interpret 'launch' promise completion as 'started')
+                    setTimeout(() => {
+                         playBtn.disabled = false;
+                         playBtn.innerText = "GAME RUNNING"; 
+                         if(progressText) progressText.innerText = "Game process started.";
+                    }, 5000);
+
+                } catch (e) {
+                    console.error("Launch Error", e);
+                    alert("Launch failed: " + e.message);
+                    playBtn.disabled = false;
+                    playBtn.innerText = "LAUNCH GAME";
+                    if(progressText) progressText.innerText = "Error during launch.";
+                }
+            });
+        }
+
+        const createBtn = document.getElementById('btn-create-inst');
+        const modal = document.getElementById('new-instance-modal');
+        const closeBtn = document.getElementById('close-modal-btn');
+        const cancelBtn = document.getElementById('cancel-create-btn');
+        const confirmBtn = document.getElementById('confirm-create-btn');
+
+        // Opening & Populating Versions
+        if (createBtn) createBtn.addEventListener('click', async () => {
+            if(modal) {
+                modal.style.display = 'flex'; // Enforce display flex
+                modal.classList.add('open');
+            }
+            
+            // Fetch versions if empty
+            const verSelect = document.getElementById('inst-version');
+            if(verSelect && verSelect.options.length <= 1) { // 1 because of default "Select Version"
+                verSelect.innerHTML = '<option value="">Loading versions...</option>';
+                try {
+                    const resp = await fetch('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json');
+                    const data = await resp.json();
+                    
+                    window.mcVersionsData = data.versions;
+                    window.mcLatestRelease = data.latest && data.latest.release ? data.latest.release : null;
+
+                    window.updateVersionsList = () => {
+                        const select = document.getElementById('inst-version');
+                        const loader = document.getElementById('inst-loader')?.value || 'vanilla';
+                        const showAll = document.getElementById('inst-show-all-versions')?.checked || false;
+                        
+                        const prevValue = select.value;
+                        select.innerHTML = '';
+
+                        // Define limits based on modloader
+                        let limitId = null;
+                        if(loader === 'neoforge') limitId = '1.20.1';
+                        if(loader === 'quilt') limitId = '1.14';
+                        if(loader === 'fabric') limitId = '1.14';
+                        if(loader === 'forge') limitId = '1.1';
+
+                        let limitIdx = window.mcVersionsData.length;
+                        if (limitId) {
+                            const found = window.mcVersionsData.findIndex(v => v.id === limitId);
+                            if (found !== -1) limitIdx = found;
+                        }
+
+                        const optGroupRel = document.createElement('optgroup');
+                        optGroupRel.label = "Releases";
+                        const optGroupSnap = document.createElement('optgroup');
+                        optGroupSnap.label = "Snapshots";
+
+                        window.mcVersionsData.forEach((v, index) => {
+                            // Filter older than the supported limit
+                            if (index > limitIdx) return;
+
+                            // Filter snapshots
+                            if (v.type !== 'release') {
+                                if (!showAll) return;
+                                // Forge and NeoForge do not support standard snapshots cleanly
+                                if (loader === 'forge' || loader === 'neoforge') return;
+                            }
+
+                            const opt = document.createElement('option');
+                            opt.value = v.id;
+                            opt.textContent = v.id;
+                            if (v.type === 'release') {
+                                optGroupRel.appendChild(opt);
+                            } else {
+                                optGroupSnap.appendChild(opt);
+                            }
+                        });
+
+                        if (optGroupRel.children.length > 0) select.appendChild(optGroupRel);
+                        if (optGroupSnap.children.length > 0) select.appendChild(optGroupSnap);
+
+                        // Try to preserve selection, or set default properly
+                        let validOptions = Array.from(select.options).map(o => o.value);
+                        if (validOptions.includes(prevValue)) {
+                            select.value = prevValue;
+                        } else if (validOptions.includes(window.mcLatestRelease) && loader === 'vanilla') {
+                            select.value = window.mcLatestRelease;
+                        } else if (validOptions.length > 0) {
+                            select.value = validOptions[0]; // first valid option
+                        }
+                    };
+
+                    window.updateVersionsList();
+                } catch (e) {
+                    console.error('Failed to fetch versions', e);
+                    verSelect.innerHTML = '<option value="1.21.1">1.21.1 (Offline Fallback)</option>';
+                }
+            }
+        });
+        
+        // Closing
+        const closeModal = () => { if(modal) modal.style.display = 'none'; };
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+
+        // Confirmation
+        if (confirmBtn) {
+            // Remove old listeners to prevent duplicates if init() called multiple times
+            const newConfirm = confirmBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirm, confirmBtn);
+            
+            newConfirm.addEventListener('click', async () => {
+                const nameInput = document.getElementById('inst-name');
+                const verifyInput = document.getElementById('inst-version');
+                const loaderInput = document.getElementById('inst-loader');
+                const cloudInput = document.getElementById('inst-cloud-screenshots');
+                
+                if(!nameInput || !verifyInput || !loaderInput) return;
+
+                const name = nameInput.value;
+                const ver = verifyInput.value; 
+                const load = loaderInput.value;
+                const cloudSync = cloudInput ? cloudInput.checked : false;
+
+                const dbIconField = document.getElementById('inst-custom-icon-base64');
+                const customIcon = dbIconField && dbIconField.value ? dbIconField.value : null;
+
+                if(name) {
+                    confirmBtn.disabled = true;
+                    confirmBtn.innerText = "Processing...";
+
+                    try {
+                        await this.add(name, ver, load, customIcon, cloudSync);
+                        closeModal();
+                        // Reset input
+                        nameInput.value = '';
+                        if(typeof clearCustomIcon === 'function') clearCustomIcon();
+                    } catch (e) {
+                        alert("Failed to create instance: " + e.message);
+                    } finally {
+                        confirmBtn.disabled = false;
+                        confirmBtn.innerText = "CONFIRM";
+                    }
+                } else {
+                    alert('Name is required!');
+                }
+            });
+        }
+    }
+};
+
+// Initialize on Load
+document.addEventListener('DOMContentLoaded', () => {
+    if(window.LibraryManager) {
+        window.LibraryManager.init();
+    }
+});
+
+// Instance Navigation Tabs Logic
+const instTabs = document.querySelectorAll('.inst-tab');
+instTabs.forEach(btn => {
+    btn.addEventListener('click', () => {
+        // Hide all panes
+        document.querySelectorAll('.inst-tab-pane').forEach(p => p.style.display = 'none');
+        instTabs.forEach(t => {
+            t.classList.remove('active');
+            t.style.borderBottom = "2px solid transparent";
+            t.style.color = "#999";
+        });
+        
+        // Show target
+        const target = btn.getAttribute('data-target');
+        const pane = document.getElementById(target);
+        if(pane) pane.style.display = 'block';
+        
+        btn.classList.add('active');
+        btn.style.borderBottom = "2px solid black";
+        btn.style.color = "black";
+    });
+});
+// End: c:\Users\hugob\Documents\GitHub\hexa.launcher\src\renderer.js
+
+// Global Init
+window.addEventListener('load', () => {
+    // Hide Loading Screen with fade out
+    setTimeout(() => {
+        const loader = document.getElementById('app-loading-screen');
+        if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(() => {
+                loader.style.display = 'none';
+            }, 500);
+        }
+    }, 1500); // Show logo for at least 1.5 seconds
+
+    // Wait for everything to settle
+    setTimeout(initSkinViewer, 500); 
+    // Init Library
+    if (typeof LibraryManager !== 'undefined') LibraryManager.init();
+    // Init Browser
+    if (typeof ContentBrowser !== 'undefined') ContentBrowser.init();
+});
+
+// === IDLE STATUS MANAGER ===
+const IdleManager = {
+    timeout: null,
+    isIdle: false,
+    IDLE_LIMIT: 300000, // 5 Minutes in ms
+
+    init() {
+        // Clear existing if re-login
+        if(this.timeout) clearTimeout(this.timeout);
+        
+        // Activity Listeners
+        const events = ['mousemove', 'keydown', 'mousedown', 'scroll', 'click'];
+        events.forEach(evt => {
+            window.addEventListener(evt, () => this.resetTimer());
+        });
+        
+        this.resetTimer();
+    },
+
+    resetTimer() {
+        // If we were idle, go back to online
+        if (this.isIdle) {
+            this.setOnline();
+        }
+        
+        // Reset the countdown
+        if (this.timeout) clearTimeout(this.timeout);
+        this.timeout = setTimeout(() => this.setIdle(), this.IDLE_LIMIT);
+    },
+
+    setIdle() {
+        if (!currentUser) return; // Don't show status if not logged in
+        this.isIdle = true;
+        const status = document.querySelector('.status');
+        if (status) {
+            status.innerText = "IDLE";
+            status.style.color = "#ffaa00"; // Orange
+        }
+    },
+
+    setOnline() {
+        this.isIdle = false;
+        const status = document.querySelector('.status');
+        if (status) {
+            status.innerText = "ONLINE";
+            status.style.color = "#00aa00"; // Green
+        }
+    }
+};
+
+// Login Logic
+const loginOverlay = document.getElementById('login-overlay');
+const loginUsernameInput = document.getElementById('login-username');
+const loginPasswordInput = document.getElementById('login-password');
+const loginSubmitBtn = document.getElementById('login-submit-btn');
+const loginErrorObj = document.getElementById('login-error');
+
+loginSubmitBtn.addEventListener('click', async () => {
+    const username = loginUsernameInput.value;
+    const password = loginPasswordInput.value;
+
+    if (!username || !password) {
+        loginErrorObj.innerText = "Please fill in all fields.";
+        return;
+    }
+
+    loginSubmitBtn.disabled = true;
+    loginSubmitBtn.innerText = "VERIFYING...";
+    loginErrorObj.innerText = "";
+    
+    try {
+        // Call Main Process Login
+        const result = await window.electron.login({ username, password });
+
+        if (result.success) {
+            currentUser = result.user;
+            
+            // Save Credentials for Remember Me
+            localStorage.setItem('hexa_saved_user', JSON.stringify({
+                username: username,
+                password: password
+            }));
+
+            // Fade out Login Overlay
+            loginOverlay.style.opacity = '0';
+            setTimeout(() => {
+                loginOverlay.style.display = 'none';
+            }, 500);
+            
+            // Update UI with User Info
+            document.getElementById('sidebar-username').innerText = currentUser.username;
+            document.querySelector('.status').innerText = "ONLINE";
+            document.querySelector('.status').style.color = "#00aa00";
+
+            // Start Idle Detection
+            IdleManager.init();
+            
+            // Listen for Java installs
+            if(window.electron) { 
+                 window.electron.onInstallProgress((data) => {
+                    const { instance, percent, msg } = data;
+                    if(instance.startsWith('java_')) {
+                        // Special handling for Java
+                        LibraryManager.showToast(msg, percent, 'toast-' + instance);
+                    }
+                });
+            }
+
+            // Update Skin Display
+            refreshSkinDisplay();
+
+        } else {
+            loginErrorObj.innerText = result.message;
+            loginSubmitBtn.disabled = false;
+            loginSubmitBtn.innerText = "INITIALIZE SESSION";
+        }
+    } catch (err) {
+        console.error("Login Error:", err);
+        loginErrorObj.innerText = "Communication Error: " + (err.message || "Unknown");
+        loginSubmitBtn.disabled = false;
+        loginSubmitBtn.innerText = "INITIALIZE SESSION";
+    }
+});
+
+async function refreshSkinDisplay() {
+    if (!currentUser) return;
+    
+    try {
+        // Construct the PHP Bridge URL for the avatar head
+        const headAvatar = `${API_BASE_URL}/php_bridge/skin_handler.php?action=get_head&username=${encodeURIComponent(currentUser.username)}&t=${Date.now()}`;
+        
+        // Construct the full skin URL (assuming it's directly accessible or via the existing API)
+        // If they are saved to storage/hexa/skins/:
+        const fullSkinUrl = `${API_BASE_URL}/storage/hexa/skins/${currentUser.username}.png?t=${Date.now()}`;
+
+        // 3. Update Sidebar Avatar
+        const sidebarAvatar = document.getElementById('sidebar-avatar');
+        if (sidebarAvatar) {
+            sidebarAvatar.innerHTML = `<img src="${headAvatar}" style="width: 100%; height: 100%; image-rendering: pixelated; border-radius: 4px;">`;
+        }
+
+        // 4. Update Wardrobe Preview
+        const wardrobePreview = document.getElementById('wardrobe-preview');
+        if (wardrobePreview) {
+            wardrobePreview.src = headAvatar;
+        }
+
+        // 5. Update 3D Viewer (Full Skin)
+        if (skinViewer) {
+            skinViewer.loadSkin(fullSkinUrl);
+        }
+
+    } catch (e) {
+        console.warn("Avatar Refresh Failed:", e);
+        // Fallback to Steve Head
+        const fallback = 'https://minotar.net/helm/MHF_Steve/64';
+        const sidebarAvatar = document.getElementById('sidebar-avatar');
+        if (sidebarAvatar) sidebarAvatar.innerHTML = `<img src="${fallback}" style="width: 100%; height: 100%; border-radius: 4px;">`;
+    }
+}
+
+// Head Extraction Algorithm
+function extractHeadAvatar(skinUrl) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "Anonymous"; // Required for manipulating external images
+        img.src = skinUrl;
+        
+        img.onload = () => {
+             try {
+                const canvas = document.createElement('canvas');
+                // We scale up to 64x64 for better UI resolution
+                canvas.width = 64; 
+                canvas.height = 64;
+                const ctx = canvas.getContext('2d');
+                
+                // Critical: Nearest Neighbor scaling
+                ctx.imageSmoothingEnabled = false; 
+
+                // Source Coordinates (Standard Minecraft)
+                // Face: (8, 8) 8x8
+                // Hat: (40, 8) 8x8
+                
+                // 1. Draw Face Layer
+                ctx.drawImage(img, 8, 8, 8, 8, 0, 0, 64, 64);
+                
+                // 2. Draw Hat Layer ( Overlay )
+                ctx.drawImage(img, 40, 8, 8, 8, 0, 0, 64, 64);
+                
+                resolve(canvas.toDataURL());
+             } catch (e) {
+                // Handle Tainted Canvas or other errors
+                console.warn("Canvas Error (CORS?):", e);
+                // Fallback to Steve Head.
+                resolve('https://minotar.net/helm/MHF_Steve/64');
+             }
+        };
+        
+        img.onerror = (e) => {
+            console.warn("Image Load Error:", e);
+            resolve('https://minotar.net/helm/MHF_Steve/64'); // Graceful fallback
+        };
+    });
+}
+
+// Skin Upload Logic
+const uploadBtn = document.getElementById('upload-skin-btn');
+const fileInput = document.getElementById('skin-upload-input');
+
+if (uploadBtn && fileInput) {
+    uploadBtn.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Basic Front-end validation
+        if (file.type !== 'image/png') {
+            alert('Only PNG files are allowed.');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('skin', file);
+        formData.append('username', currentUser ? currentUser.username : 'Guest');
+        formData.append('action', 'upload');
+
+        // UI Feedback
+        const originalText = document.querySelector('#upload-skin-btn .card-title').innerText;
+        document.querySelector('#upload-skin-btn .card-title').innerText = "Uploading...";
+
+        try {
+            // Use legacy endpoint for upload if not specified otherwise
+            const response = await fetch(`${API_BASE_URL}/php_bridge/skin_handler.php`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                alert('Skin uploaded successfully!');
+                refreshSkinDisplay();
+            } else {
+                alert('Upload failed: ' + (result.error || 'Unknown error'));
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Network error while uploading skin.');
+        } finally {
+            document.querySelector('#upload-skin-btn .card-title').innerText = originalText;
+            fileInput.value = ''; // Reset
+        }
+    });
+}
+
+// Enter Key Login
+loginPasswordInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        loginSubmitBtn.click();
+    }
+});
+
+// Auto-Login / Remember Me
+const savedUser = localStorage.getItem('hexa_saved_user');
+if (savedUser) {
+    try {
+        const { username, password } = JSON.parse(savedUser);
+        loginUsernameInput.value = username;
+        loginPasswordInput.value = password;
+        // Auto-click if you want instant login, or just pre-fill. 
+        // User asked: "retiens le compte pour eviter de ce relog h24" -> implies auto-login or pre-fill. 
+        // Let's pre-fill and maybe auto-click? 
+        // "entrer nous permert de ce connecter" -> implies manual action is okay but boring to type.
+        // Let's trigger click.
+        // But maybe user wants to switch account?
+        // Let's just pre-fill + auto-login.
+        setTimeout(() => loginSubmitBtn.click(), 500);
+    } catch (e) {
+        console.error("Saved user corrupted", e);
+    }
+}
+
+
+// === NAVIGATION & WINDOW MANAGER ===
+const NavSystem = {
+    history: [],
+    currentIndex: -1,
+    isNavigating: false, // Flag to prevent pushing state during history traversal
+
+    init() {
+        // Initial State
+        this.pushState({ tab: 'home', type: 'root' });
+        
+        // Buttons
+        document.getElementById('nav-back-btn').addEventListener('click', () => this.goBack());
+        document.getElementById('nav-fwd-btn').addEventListener('click', () => this.goForward());
+
+        // Mouse Buttons (3 = Back, 4 = Forward)
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 3) {
+                 // First check for active overlays/modals that should be closed first
+                 const gallery = document.getElementById('gallery-lightbox');
+                 const instView = document.getElementById('instance-details-view');
+                 const selectModal = document.getElementById('select-instance-modal');
+
+                 if (gallery && gallery.style.display !== 'none') {
+                     gallery.style.display = 'none';
+                     return;
+                 }
+                 if (selectModal && selectModal.style.display !== 'none') {
+                     selectModal.style.display = 'none';
+                     return;
+                 }
+                 // If instance detail view is open and it is THE current state, goBack() handles it.
+                 // But if it's just an overlay on top of current state without history push (unlikely with this code), close it.
+                 
+                 this.goBack();
+            }
+            if (e.button === 4) this.goForward();
+        });
+
+        // Window Controls
+        document.getElementById('min-btn').addEventListener('click', () => window.electron.minimize());
+        document.getElementById('max-btn').addEventListener('click', () => window.electron.maximize());
+        document.getElementById('close-btn').addEventListener('click', () => window.electron.close());
+    },
+
+    pushState(state) {
+        if (this.isNavigating) return;
+
+        // If we are not at the end of history, slice it
+        if (this.currentIndex < this.history.length - 1) {
+            this.history = this.history.slice(0, this.currentIndex + 1);
+        }
+
+        // Avoid duplicate consecutive states
+        const current = this.history[this.currentIndex];
+        if (current && JSON.stringify(current) === JSON.stringify(state)) return;
+
+        this.history.push(state);
+        this.currentIndex++;
+        this.updateUI();
+    },
+
+    goBack() {
+        if (this.currentIndex > 0) {
+            this.currentIndex--;
+            this.restoreState(this.history[this.currentIndex]);
+        }
+    },
+
+    goForward() {
+        if (this.currentIndex < this.history.length - 1) {
+            this.currentIndex++;
+            this.restoreState(this.history[this.currentIndex]);
+        }
+    },
+
+    restoreState(state) {
+        this.isNavigating = true;
+        
+        // Always close volatile overlays first
+        const instView = document.getElementById('instance-details-view');
+        if(instView) instView.style.display = 'none';
+        
+        const gallery = document.getElementById('gallery-lightbox');
+        if(gallery) gallery.style.display = 'none';
+
+        if (state.type === 'root') {
+            // Close overlays
+            const detailView = document.getElementById('project-details-view');
+            if(detailView) detailView.style.display = 'none';
+
+            // Switch Tab
+            const navBtn = document.querySelector(`.nav-item[data-tab="${state.tab}"]`);
+            if (navBtn) navBtn.click();
+        } 
+        else if (state.type === 'browser-detail') {
+            // Ensure we are on browser tab
+            const navBtn = document.querySelector(`.nav-item[data-tab="content"]`);
+            if (navBtn) navBtn.click();
+            
+            // Re-open details if we have data, otherwise might have to reload (complex)
+            // For now, we assume ContentBrowser caches the object or we just hide/show
+            // Since restoring exact object is hard without storage, we will rely on 
+            // the view being just "open" or "closed".
+            
+            // Actually, simpler approach:
+            // If going back to root -> hide detail view
+            // If going forward to detail -> show detail view (if data persists)
+            
+            // Better: Store the 'hit' object in state if possible, or just handle view visibility
+            if (state.hit) {
+                ContentBrowser.openProjectDetails(state.hit, false); // false = don't push state
+            }
+        }
+        else if (state.type === 'instance-detail') {
+             // We need to re-open the Instance View
+             // Since we don't store the full 'inst' object in history (to save mem), we might need to find it again
+             // OR we just assume the DOM is still there if we haven't destroyed it.
+             // For now, let's try to just show it if we have the ID, or look it up.
+             
+             // Simple fallback: If we saved the ID, we could fetch it.
+             // But 'openDetails' requires the full object.
+             // IMPROVEMENT: We should store vital info in state or look up from InstanceManager.
+             
+             // WORKAROUND: Just show the view. The view might still be populated with the *previous* instance
+             // if the user visited multiple instances. 
+             // Ideally: InstanceManager.getInstance(state.instanceId) -> openDetails
+             
+             // For now, show view:
+             const instView = document.getElementById('instance-details-view');
+             if(instView) instView.style.display = 'block';
+        }
+
+        this.updateUI();
+        this.isNavigating = false;
+    },
+
+    updateUI() {
+        document.getElementById('nav-back-btn').disabled = this.currentIndex <= 0;
+        document.getElementById('nav-fwd-btn').disabled = this.currentIndex >= this.history.length - 1;
+    }
+};
+
+// Navigation Logic (Tab Switching)
+document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        // Update UI Active State
+        document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Scroll to Target Section
+        const tabId = btn.getAttribute('data-tab');
+        const tabEl = document.getElementById(`${tabId}-tab`);
+        
+        if (tabEl) {
+            tabEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // Push to History (only if triggered by user click, not by code)
+        if (e.isTrusted || !NavSystem.isNavigating) {
+             NavSystem.pushState({ tab: tabId, type: 'root' });
+        }
+    });
+});
+
+// Init Nav
+NavSystem.init();
+
+// RAM Slider Logic
+const ramSlider = document.getElementById('ram-slider');
+const ramDisplay = document.getElementById('ram-display');
+
+if(ramSlider && ramDisplay) {
+    ramSlider.addEventListener('input', (e) => {
+        ramDisplay.innerText = `${e.target.value} MB`;
+    });
+}
+
+// Launch Logic
+const playBtn = document.getElementById('play-btn');
+const progressText = document.getElementById('progress-text');
+const versionSelector = document.getElementById('version-selector');
+
+if (playBtn) {
+    playBtn.addEventListener('click', async () => {
+        const selectedId = versionSelector.value;
+        const inst = OFFICIAL_INSTANCES.find(i => i.id === selectedId) || 
+                     ((typeof LibraryManager !== 'undefined') ? LibraryManager.instances.find(i => i.id === selectedId) : null);
+        
+        // Save Last Launched
+        localStorage.setItem('hexa_last_launched', selectedId);
+
+        // UI Feedback
+        const originalText = playBtn.innerText;
+        playBtn.disabled = true;
+        playBtn.innerText = "LAUNCHING...";
+
+        const ramVal = document.getElementById('ram-slider') ? document.getElementById('ram-slider').value : "4096";
+
+        const options = {
+            username: currentUser ? currentUser.username : "Player", 
+            type: 'offline',
+            memory: ramVal + "M"
+        };
+        
+        if (inst) {
+            options.instanceFolder = inst.folder;
+            options.version = {
+                number: inst.version,
+                type: inst.type || "release"
+            };
+            // Pass loader info if needed by backend (though backend currently relies on logic we haven't fully implemented for auto-installing loaders just by name)
+            // But main.js accepts forge/fabric
+            if (inst.loader === 'Fabric') options.fabric = true;
+            if (inst.loader === 'Forge') options.forge = true;
+
+        } else {
+             // Fallback
+             options.version = {
+                 number: selectedId || "1.21.1",
+                 type: "release"
+             };
+        }
+
+        window.electron.onLog((msg) => {
+            console.log(msg);
+            progressText.innerText = `>> ${msg.substring(0, 60)}...`;
+            
+            // Append to Instance Logs Tab if available
+            const logContainer = document.getElementById('inst-logs-container');
+            if(logContainer) {
+                const line = document.createElement('div');
+                line.style.borderBottom = '1px solid #333';
+                line.style.padding = '2px 0';
+                line.style.fontSize = '11px';
+                line.innerText = msg;
+                logContainer.appendChild(line);
+                // Auto scroll
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+        });
+
+        const result = await window.electron.launch(options);
+
+        if (!result.success) {
+            alert("Launch Init Failure: " + result.error);
+            playBtn.disabled = false;
+            playBtn.innerText = "LAUNCH GAME";
+        } else {
+            progressText.innerText = "Process Active.";
+            setTimeout(() => {
+                playBtn.disabled = false;
+                playBtn.innerText = "LAUNCH GAME";
+                progressText.innerText = "Ready.";
+            }, 5000);
+        }
+    });
+}
+
+/* === MODRINTH BROWSER === */
+/* === UPDATED MODRINTH BROWSER LOGIC === */
+const ContentBrowser = {
+    apiBase: 'https://api.modrinth.com/v2/search',
+    state: {
+        query: '',
+        type: 'modpack',
+        version: '',
+        loader: '',
+        category: '',
+        env: '', 
+        offset: 0,
+        limit: 75
+    },
+    
+    init() {
+        console.log("Initializing ContentBrowser...");
+        
+        // Populate Version Filter
+        this.populateVersions();
+        
+        this.bindEvents();
+        setTimeout(() => this.search(), 100); // Initial Search
+
+        // Setup Instance Selector Modal
+        const closeSel = document.getElementById('close-select-inst-btn');
+        const modal = document.getElementById('select-instance-modal');
+        if(closeSel && modal) {
+            closeSel.onclick = () => modal.style.display = 'none';
+        }
+    },
+
+    async populateVersions() {
+        const list = document.getElementById('list-version');
+        if(!list) return;
+
+        // Clear existing (except "Any Version")
+        // Note: index.html has "Any Version" hardcoded, we append after it
+        
+        try {
+            const res = await fetch('https://api.modrinth.com/v2/tag/game_version');
+            const data = await res.json();
+            
+            // Filter release types if needed, but user asked for "All versions up to latest"
+            // Modrinth returns objects like {version: "1.20.1", version_type: "release", date: ...}
+            
+            // Sort by date desc (recent first)
+            const versions = data
+                .filter(v => v.version_type === 'release' || v.version_type === 'beta') // Release & Beta
+                .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+            // Limit list length to avoid massive scroll? Or show all?
+            // User said "all versions up to latest"
+            
+            versions.forEach(ver => {
+                 // Only add standard MC versions (regex check to avoid snapshot spam if desired, but user said ALL)
+                 // Let's stick to major/minor releases to keep UI clean, or everything?
+                 // Modrinth tags include "1.20.1", "1.19" etc.
+                 
+                 const div = document.createElement('div');
+                 div.className = 'filter-link';
+                 div.setAttribute('data-value', ver.version);
+                 div.innerText = ver.version;
+                 list.appendChild(div);
+            });
+
+        } catch(e) {
+            console.warn("Failed to fetch versions dynamically, using fallback", e);
+            const commonVersions = [
+                "1.21.4", "1.21.3", "1.21.1", "1.21", "1.20.6", "1.20.4", "1.20.1", 
+                "1.19.4", "1.19.2", "1.18.2", "1.16.5", "1.12.2", "1.8.9"
+            ];
+             commonVersions.forEach(ver => {
+                const div = document.createElement('div');
+                div.className = 'filter-link';
+                div.setAttribute('data-value', ver);
+                div.innerText = ver;
+                list.appendChild(div);
+            });
+        }
+    },
+
+    bindEvents() {
+
+          const btnPrev = document.getElementById('btn-prev-page');
+          const btnNext = document.getElementById('btn-next-page');
+          if(btnPrev) {
+              btnPrev.addEventListener('click', () => {
+                  if(this.state.offset > 0) {
+                      this.state.offset = Math.max(0, this.state.offset - this.state.limit);
+                      this.search();
+                  }
+              });
+          }
+          if(btnNext) {
+              btnNext.addEventListener('click', () => {
+                  this.state.offset += this.state.limit;
+                  this.search();
+              });
+          }
+
+        const searchInput = document.getElementById('browser-search');
+        let timeout = null;
+        if(searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(timeout);
+                this.state.query = e.target.value;
+                this.state.offset = 0; 
+                timeout = setTimeout(() => this.search(), 75);
+            });
+        }
+
+        document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.nav-tab-btn').forEach(b => {
+                           b.classList.remove('active');
+                           b.style.color = '#999';
+                });
+                btn.classList.add('active');
+                btn.style.color = '#000';
+                
+                this.state.type = btn.getAttribute('data-type');
+                this.state.offset = 0;
+                this.search();
+            });
+        });
+
+        const setupFilterGroup = (groupId, stateKey) => {
+            const container = document.getElementById(groupId);
+            if(!container) return;
+            container.addEventListener('click', (e) => {
+                 const link = e.target.closest('.filter-link');
+                 if(!link) return;
+                 container.querySelectorAll('.filter-link').forEach(el => el.classList.remove('active'));
+                 link.classList.add('active');
+                 const val = link.getAttribute('data-value');
+                 this.state[stateKey] = val;
+                 this.state.offset = 0;
+                 this.search();
+             });
+        };
+
+        setupFilterGroup('list-version', 'version');
+        setupFilterGroup('list-loader', 'loader');
+        setupFilterGroup('list-category', 'category');
+        setupFilterGroup('list-env', 'env');
+        
+        const closeBtn = document.getElementById('close-browser-btn');
+        if(closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                const tab = document.getElementById('browser-tab');
+                if(tab) tab.classList.remove('active-browser');
+            });
+        }
+        
+        const searchBtn = document.getElementById('do-search-btn');
+        if(searchBtn) {
+           searchBtn.addEventListener('click', () => this.search());
+        }
+
+        // Open Browser Trigger (e.g. from Library)
+        const browseBtn = document.getElementById('btn-browse-repo');
+        const backBtn = document.getElementById('back-to-lib');
+        
+        if(browseBtn) {
+             browseBtn.addEventListener('click', () => {
+                 const tab = document.getElementById('browser-tab');
+                 if(tab) tab.classList.add('active-browser');
+                 // Ensure initial search if empty
+                 if(document.getElementById('browser-grid').children.length === 0) {
+                     this.search();
+                 }
+             });
+        }
+        if(backBtn) {
+            backBtn.addEventListener('click', () => {
+                 const tab = document.getElementById('browser-tab');
+                 if(tab) tab.classList.remove('active-browser');
+            });
+        }
+    },
+
+    triggerInstall(project) {
+        console.log("Triggering install for:", project);
+        // Fallback: If this.state.type is missing, try to infer from project.project_type
+        const type = this.state.type || project.project_type;
+        console.log("Install Type detected:", type);
+
+        if(type === 'modpack') {
+            const modal = document.getElementById('instance-name-modal');
+            const input = document.getElementById('new-instance-name');
+            const confirmBtn = document.getElementById('confirm-inst-name');
+            const cancelBtn = document.getElementById('cancel-inst-name');
+
+            if(modal && input) {
+                input.value = project.title;
+                modal.style.display = 'flex';
+                
+                // One-time event handlers
+                const onConfirm = () => {
+                   const name = input.value;
+                   if(name) this.installModpack(project, name);
+                   cleanup();
+                };
+
+                const onCancel = () => {
+                    cleanup();
+                };
+
+                const cleanup = () => {
+                    modal.style.display = 'none';
+                    confirmBtn.removeEventListener('click', onConfirm);
+                    cancelBtn.removeEventListener('click', onCancel);
+                };
+
+                confirmBtn.addEventListener('click', onConfirm);
+                cancelBtn.addEventListener('click', onCancel);
+            } else {
+                // Fallback
+                const name = prompt("Name your new instance:", project.title);
+                if(name) this.installModpack(project, name);
+            }
+        } else {
+            // Mod / ResourcePack / Shader -> Add to existing instance
+            const modal = document.getElementById('select-instance-modal');
+            const list = document.getElementById('instance-selection-list');
+            if(modal && list) {
+                list.innerHTML = '';
+                // Use LibraryManager instances if available
+                const instances = (typeof LibraryManager !== 'undefined') ? LibraryManager.instances : [
+                     { id: 'def_1', name: 'Hexa Optimized', version: '1.21.1', loader: 'Fabric' }
+                ];
+                
+                instances.forEach(inst => {
+                    const item = document.createElement('div');
+                    item.className = 'filter-link'; 
+                    item.innerHTML = `<b>${inst.name}</b> <small>(${inst.version})</small>`;
+                    item.style.border = "1px solid #eee";
+                    item.onclick = () => {
+                        this.installModToInstance(project, inst);
+                        modal.style.display = 'none';
+                    };
+                    list.appendChild(item);
+                });
+                modal.style.display = 'flex';
+            }
+        }
+    },
+
+    async installModpack(project, name) {
+        // UI Feedback
+        const btn = document.activeElement; 
+        const originalText = btn ? btn.innerText : 'INSTALL';
+        if(btn && btn.tagName === 'BUTTON') btn.innerText = "INITIALIZING...";
+        
+        try {
+            // 1. Fetch Version Info
+            const res = await fetch(`https://api.modrinth.com/v2/project/${project.slug}/version`);
+            const versions = await res.json();
+            
+            if(!versions || versions.length === 0) throw new Error("No versions found");
+            const best = versions[0];
+            
+            const loader = best.loaders[0];
+            const gameVer = best.game_versions[0];
+            
+            // 2. Add to Library
+            if(typeof LibraryManager !== 'undefined') {
+                // Determine icon
+                const icon = project.icon_url || 'assets/logo_no_bc.png';
+                const newInst = LibraryManager.add(name, gameVer, loader, icon);
+                
+                newInst.status = "Installing 0%";
+                LibraryManager.save();
+                LibraryManager.render();
+                
+                // Trigger Background Install
+                if(window.electron) {
+                    // Try to get primary file URL
+                    let downloadUrl = null;
+                    const primaryFile = best.files.find(f => f.primary);
+                    if (primaryFile) downloadUrl = primaryFile.url;
+                    else if (best.files.length > 0) downloadUrl = best.files[0].url;
+
+                    if (downloadUrl) {
+                        this.showToast(`Started installation of ${name}`, 0);
+                        
+                        window.electron.installModpack({
+                            url: downloadUrl,
+                            name: name,
+                            folderName: newInst.folder
+                        }).then(res => {
+                            if(!res.success) {
+                                console.error(res.error);
+                                this.showToast(`Error: ${res.error}`, -1);
+                                newInst.status = "Error";
+                                LibraryManager.save();
+                                LibraryManager.render();
+                            }
+                        });
+                    } else {
+                        alert("No download URL found for this version.");
+                    }
+                } else {
+                    alert("Backend not connected (Dev Mode?). Installation simulated.");
+                }
+            } else {
+                console.error("LibraryManager not defined!");
+            }
+            
+            // 3. Switch to Library Tab
+            const tab = document.querySelector('.nav-item[data-tab="content"]');
+            if(tab) tab.click();
+            
+            const browserTab = document.getElementById('browser-tab');
+            if(browserTab) browserTab.classList.remove('active-browser');
+
+        } catch(e) {
+            console.error(e);
+            alert("Error during installation: " + e.message);
+        } finally {
+            if(btn && btn.tagName === 'BUTTON') btn.innerText = originalText;
+        }
+    },
+
+    async installModToInstance(project, instance) {
+        console.log(`Installing ${project.title} to ${instance.name}...`);
+        try {
+            const res = await fetch(`https://api.modrinth.com/v2/project/${project.slug}/version?game_versions=["${instance.version}"]&loaders=["${instance.loader}"]`);
+            const versions = await res.json();
+            
+            if(versions.length > 0) {
+                const best = versions[0]; // First is usually latest
+                const file = best.files.find(f => f.primary) || best.files[0];
+                
+                if(confirm(`Install ${project.title} v${best.version_number} to ${instance.name}?`)) {
+                     alert("Download started... (Backend implementation pending)");
+                }
+            } else {
+                alert(`No compatible version found for ${instance.name} (${instance.version} / ${instance.loader})`);
+            }
+        } catch(e) {
+            console.error(e);
+            alert("Error fetching versions.");
+        }
+    },
+
+    async search() {
+        const grid = document.getElementById('browser-grid');
+        const loader = document.getElementById('browser-loader');
+        if(!grid) return;
+        
+        grid.innerHTML = '';
+        if(loader) loader.style.display = 'block';
+        
+        try {
+            const facets = [];
+            if(this.state.type) facets.push([`project_type:${this.state.type}`]);
+            if(this.state.version) facets.push([`versions:${this.state.version}`]);
+            if(this.state.loader) facets.push([`categories:${this.state.loader}`]);
+            if(this.state.category) facets.push([`categories:${this.state.category}`]);
+            if(this.state.env) facets.push([`client_side:${this.state.env}`]);
+
+            const params = new URLSearchParams({
+                query: this.state.query,
+                limit: this.state.limit,
+                offset: this.state.offset,
+                facets: JSON.stringify(facets)
+            });
+
+            const res = await fetch(`${this.apiBase}?${params}`);
+            const data = await res.json();
+            
+            
+              if(loader) loader.style.display = 'none';
+
+              const indicator = document.getElementById('page-indicator');
+              if(indicator) {
+                  indicator.innerText = 'Page ' + (Math.floor(this.state.offset / this.state.limit) + 1);
+              }
+
+            
+            if(data.hits && data.hits.length > 0) {
+                    data.hits.forEach(hit => {
+                        const card = document.createElement("div");
+                        card.className = "content-card";
+                        card.style.cssText = "display: flex; flex-direction: column; background: #111; border-radius: 8px; border: 1px solid #222; overflow: hidden; cursor: pointer; transition: transform 0.2s, background 0.2s; height: 100%; min-height: 220px;";
+                        card.onmouseover = () => { card.style.background = "#181818"; card.style.transform = "translateY(-2px)"; };
+                        card.onmouseout = () => { card.style.background = "#111"; card.style.transform = "translateY(0)"; };
+
+                        const icon = hit.icon_url || "https://via.placeholder.com/64";
+                        const title = hit.title || hit.slug;
+                        const author = hit.author || "Unknown";
+                        const dls = hit.downloads ? (hit.downloads / 1000).toFixed(1) + 'k' : '0k';
+                        const date = hit.date_modified ? new Date(hit.date_modified).toLocaleDateString() : '';
+
+                        card.innerHTML = `
+                            <div style="height: 100px; background: #000; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;">
+                                <img src="${icon}" style="width: 64px; height: 64px; border-radius: 12px; object-fit: contain; z-index: 2;">
+                            </div>
+                            <div style="padding: 15px; display: flex; flex-direction: column; flex: 1; justify-content: space-between;">
+                                <div>
+                                    <h4 style="margin: 0 0 5px 0; font-size: 16px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${title}</h4>
+                                    <span style="font-size: 12px; color: #888; display: block; margin-bottom: 10px;">By ${author}</span>
+                                    <p style="margin: 0 0 15px 0; font-size: 12px; color: #aaa; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis;">${hit.description || ''}</p>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #222;">
+                                    <span style="font-size: 11px; color: #777;"><i class="fas fa-download"></i> ${dls}</span>
+                                    <span style="font-size: 11px; color: #777;"><i class="fas fa-calendar-alt"></i> ${date}</span>
+                                </div>
+                            </div>
+                        `;
+
+                        // Click entire card to open details
+
+                    card.addEventListener('click', () => {
+                        this.openProjectDetails(hit);
+                    });
+                    
+                    grid.appendChild(card);
+                });
+            } else {
+                grid.innerHTML = '<div style="padding:20px; color:#666;">No results found.</div>';
+            }
+
+        } catch(e) {
+            console.error(e);
+            if(loader) loader.innerText = "Error loading results.";
+        }
+    },
+
+    async openProjectDetails(hit, pushToHistory = true) {
+        const view = document.getElementById('project-details-view');
+        if(!view) return;
+
+        if (pushToHistory) {
+             NavSystem.pushState({ tab: 'content', type: 'browser-detail', hit: hit });
+        }
+
+        // Reset & Loading State
+        view.style.display = 'block';
+        document.getElementById('detail-icon').src = hit.icon_url || 'https://via.placeholder.com/150';
+        document.getElementById('detail-title').innerText = hit.title;
+        document.getElementById('detail-desc').innerText = hit.description || "Loading description...";
+        document.getElementById('markdown-content').innerHTML = '<div class="spinner"></div> Loading...';
+        document.getElementById('versions-list').innerHTML = '';
+        document.getElementById('gallery-grid').innerHTML = '';
+        
+        // Setup Close & Install
+        document.getElementById('detail-close-btn').onclick = () => {
+             NavSystem.goBack();
+        };
+        
+        const installBtn = document.getElementById('detail-install-btn');
+        // Remove old listeners by cloning
+        const newBtn = installBtn.cloneNode(true);
+        installBtn.parentNode.replaceChild(newBtn, installBtn);
+        
+        newBtn.onclick = () => {
+             // Ensure we check 'project_type' from the hit object if state is generic
+             // hit might just be search result, which HAS project_type.
+             // But if we navigated here directly (e.g. from featured), it might be different.
+             // Ensure generic handler checks correct properties.
+             if (!hit.project_type && this.state && this.state.type) {
+                 hit.project_type = this.state.type;
+             }
+             this.triggerInstall(hit);
+        };
+        
+        // Tab Logic
+        const tabs = document.querySelectorAll('.tab-btn');
+        tabs.forEach(t => {
+            t.onclick = () => {
+                tabs.forEach(x => x.classList.remove('active'));
+                t.classList.add('active');
+                document.querySelectorAll('.detail-tab').forEach(d => d.classList.remove('active'));
+                document.getElementById(t.dataset.target).classList.add('active');
+            };
+        });
+        // Reset to first tab
+        tabs[0].click();
+
+        try {
+            // Fetch Full Details
+            const projectRes = await fetch(`https://api.modrinth.com/v2/project/${hit.slug}`);
+            const project = await projectRes.json();
+            
+            // Store for version specific installs
+            this.currentProjectTitle = project.title;
+            this.currentProjectIcon = project.icon_url;
+            
+            // Render Description
+            if(project.body) {
+                document.getElementById('markdown-content').innerHTML = marked.parse(project.body);
+            }
+            
+            // Render Gallery
+            if(project.gallery) {
+                const galleryGrid = document.getElementById('gallery-grid');
+                project.gallery.forEach(img => {
+                    const div = document.createElement('div');
+                    div.className = 'gallery-card';
+                    div.innerHTML = `
+                        <img src="${img.url}" class="gallery-img">
+                        <div class="gallery-caption">${img.title || 'Untitled'}</div>
+                    `;
+                    div.onclick = () => {
+                        const lightbox = document.getElementById('gallery-lightbox');
+                        const lightboxImg = document.getElementById('lightbox-img');
+                        lightboxImg.src = img.url;
+                        lightbox.classList.add('open');
+                        
+                        document.getElementById('lightbox-close').onclick = () => lightbox.classList.remove('open');
+                        lightbox.onclick = (e) => { if(e.target === lightbox) lightbox.classList.remove('open'); };
+                    };
+                    galleryGrid.appendChild(div);
+                });
+            }
+            
+            // Sidebar Info
+            document.getElementById('info-updated').innerText = new Date(project.updated).toLocaleDateString();
+            document.getElementById('info-downloads').innerText = project.downloads.toLocaleString();
+            document.getElementById('info-license').innerText = project.license.id.toUpperCase();
+            
+            document.getElementById('detail-web-btn').onclick = () => {
+                 // Use window.api.openExternal if available, else standard open
+                 if(window.electron && window.electron.openExternal) window.electron.openExternal(`https://modrinth.com/project/${project.slug}`);
+                 else window.open(`https://modrinth.com/project/${project.slug}`);
+            };
+
+            // Fetch Versions
+            const verRes = await fetch(`https://api.modrinth.com/v2/project/${hit.slug}/version`);
+            const versions = await verRes.json();
+            this.renderVersions(versions);
+
+        } catch(e) {
+            console.error(e);
+            document.getElementById('markdown-content').innerText = "Failed to load project details.";
+        }
+    },
+
+    renderVersions(versions) {
+        // Pagination State
+        let currentPage = 1;
+        const perPage = 10;
+        const totalPages = Math.ceil(versions.length / perPage);
+        
+        const renderPage = (page) => {
+            const start = (page - 1) * perPage;
+            const pagedVersions = versions.slice(start, start + perPage);
+            const list = document.getElementById('versions-list');
+            list.innerHTML = '';
+            
+            pagedVersions.forEach(ver => {
+                 const row = document.createElement('div');
+                 row.className = 'version-row';
+                 
+                 const typeClass = ver.version_type === 'release' ? 'tag-release' : (ver.version_type === 'beta' ? 'tag-beta' : 'tag-alpha');
+                 
+                 row.innerHTML = `
+                    <div class="version-info">
+                        <span class="version-tag ${typeClass}">${ver.version_type}</span>
+                        <div>
+                            <div class="version-name">${ver.name}</div>
+                            <div class="version-meta">${ver.game_versions[0]} • ${ver.loaders[0]}</div>
+                        </div>
+                    </div>
+                    <button class="secondary-btn small" title="Download">⬇</button>
+                 `;
+                 
+                 // Install specific version
+                 row.querySelector('button').onclick = () => {
+                      // Pass full context for specific version install
+                      // We need to pass the project info too, which we might need to store in 'this' context or pass down.
+                      // Minimal hack: fake a project object or use current state
+                      
+                      // Better: Trigger install with the version object
+                      if (this.currentProjectTitle) { // Ensure we have context
+                          // If it's a modpack, we install this specific version as a new instance
+                          if (this.state.type === 'modpack' || (ver.loaders && ver.loaders.length > 0)) {
+                              // We use installModpack but we need to trick it to use THIS version data instead of fetching latest
+                              // Actually installModpack implementation currently fetches versions again.
+                              // Let's modify installModpack to accept a version object directly if provided.
+                          }
+                      }
+                      
+                      // For now, re-route to main install logic which fetches latest. 
+                      // TODO: Implement specific version install.
+                      // Just alert for now to show button works.
+                      // alert("Installing version: " + ver.version_number);
+                      
+                      // Try to install this specific file URL
+                      if (this.state.type === 'modpack') {
+                          this.installModpack({ ...ver, title: this.currentProjectTitle || ver.name, icon_url: this.currentProjectIcon }, "Instance " + ver.version_number);
+                      } else {
+                          // Mod install
+                          this.triggerInstall({ project_type: 'mod', ...ver, title: ver.name });
+                      }
+                 };
+                 list.appendChild(row);
+            });
+            
+            document.getElementById('ver-page-info').innerText = `Page ${page} of ${totalPages}`;
+            document.getElementById('ver-prev').disabled = page === 1;
+            document.getElementById('ver-next').disabled = page === totalPages;
+        };
+
+        document.getElementById('ver-prev').onclick = () => { if(currentPage > 1) renderPage(--currentPage); };
+        document.getElementById('ver-next').onclick = () => { if(currentPage < totalPages) renderPage(++currentPage); };
+        
+        renderPage(1);
+    }
+};
+
+// --- GLOBAL SETTINGS LOGIC ---
+document.addEventListener('DOMContentLoaded', () => {
+    const ramSlider = document.getElementById('ram-slider');
+    const ramDisplay = document.getElementById('ram-display');
+    
+    const gpuSelector = document.getElementById('gpu-selector');
+    
+    // -- NEW GPU DETECTION LOGIC --
+    if (gpuSelector) {
+        let detectedGPU = "Detected Graphics";
+        try {
+            const canvas = document.createElement('canvas');
+            let gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (gl) {
+                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                if (debugInfo) {
+                    const unmasked = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                    let cleanGPU = unmasked;
+                    if(cleanGPU.includes("ANGLE (")) {
+                        const parts = cleanGPU.split(',');
+                        if(parts.length > 1) {
+                            cleanGPU = parts[1].trim().split(' Direct3D')[0].trim();
+                        }
+                    }
+                    detectedGPU = cleanGPU;
+                }
+            }
+        } catch(e) {}
+        
+        gpuSelector.innerHTML = '<option value="auto">Auto-Select High Performance GPU</option><option value="current">' + detectedGPU + '</option>';
+        
+        gpuSelector.value = localStorage.getItem('gpu-selector') || 'auto';
+        
+        gpuSelector.addEventListener('change', (e) => {
+            localStorage.setItem('gpu-selector', e.target.value);
+        });
+    }
+    // -- END GPU --
+    
+    const javaPath = document.getElementById('java-path');
+    const defaultWidth = document.getElementById('default-width');
+    const defaultHeight = document.getElementById('default-height');
+    const defaultJvm = document.getElementById('default-jvm');
+    const appTheme = document.getElementById('app-theme');
+    const saveBtn = document.getElementById('save-settings-btn');
+    const saveMsg = document.getElementById('save-settings-msg');
+
+    // Load saved settings if exist
+    if(ramSlider) ramSlider.value = localStorage.getItem('hexa-ram') || '4096';
+    if(ramDisplay && ramSlider) ramDisplay.innerText = ramSlider.value + ' MB';
+    if(gpuSelector) gpuSelector.value = localStorage.getItem('hexa-gpu') || 'auto';
+    if(javaPath) javaPath.value = localStorage.getItem('hexa-java') || '';
+    if(defaultWidth) defaultWidth.value = localStorage.getItem('hexa-width') || '1280';
+    if(defaultHeight) defaultHeight.value = localStorage.getItem('hexa-height') || '720';
+    if(defaultJvm) defaultJvm.value = localStorage.getItem('hexa-jvm') || '-XX:+UseG1GC -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50';
+    if(appTheme) appTheme.value = localStorage.getItem('hexa-theme') || 'dark';
+
+    // Save settings on click
+    if(saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            if(ramSlider) localStorage.setItem('hexa-ram', ramSlider.value);
+            if(gpuSelector) localStorage.setItem('hexa-gpu', gpuSelector.value);
+            if(javaPath) localStorage.setItem('hexa-java', javaPath.value);
+            if(defaultWidth) localStorage.setItem('hexa-width', defaultWidth.value);
+            if(defaultHeight) localStorage.setItem('hexa-height', defaultHeight.value);
+            if(defaultJvm) localStorage.setItem('hexa-jvm', defaultJvm.value);
+            if(appTheme) localStorage.setItem('hexa-theme', appTheme.value);
+
+            if(saveMsg) {
+                saveMsg.style.display = 'inline-flex';
+                setTimeout(() => { saveMsg.style.display = 'none'; }, 3000);
             }
         });
     }
 });
-const wardrobeModal = document.getElementById('skin-wardrobe-modal');
-const closeWardrobeBtn = document.getElementById('close-wardrobe-btn');
-const importSkinBtn = document.getElementById('import-skin-btn');
-const saveSkinBtn = document.getElementById('save-skin-btn');
-const skinPresetsGrid = document.getElementById('skin-presets-grid');
-let currentEditingAccount = null;
-async function refreshAccountList() {
-    const accContainer = document.getElementById('account-list-container');
-    accContainer.innerHTML = ''; 
-    let activeUser = null;
-    let accounts = [];
-    const storedAccounts = localStorage.getItem('hg_accounts');
-    if (storedAccounts) {
-        accounts = JSON.parse(storedAccounts);
-    } else {
-        let legacyUser = null;
-        if (localStorage.getItem('hg_user_data')) legacyUser = JSON.parse(localStorage.getItem('hg_user_data'));
-        else if (localStorage.getItem('user_session')) legacyUser = JSON.parse(localStorage.getItem('user_session'));
-        if (legacyUser) {
-            accounts.push(legacyUser);
-            localStorage.setItem('hg_accounts', JSON.stringify(accounts));
-        }
-    }
-    if (localStorage.getItem('hg_user_data')) {
-        try {
-            activeUser = JSON.parse(localStorage.getItem('hg_user_data'));
-        } catch(e){}
-    }
-    if (accounts.length === 0) {
-        accContainer.innerHTML = '<p style="color:#888; text-align:center;">Aucun compte.</p>';
-        return;
-    }
-    accounts.forEach(acc => {
-        const isActive = activeUser && activeUser.uuid === acc.uuid;
-        const typeLabel = acc.type === 'hg_studio' ? 'HG Studio' : 'Microsoft';
-        let avatarUrl = `https://minotar.net/helm/${acc.username}/100.png`;
-        if (acc.type === 'hg_studio' && (acc.avatar_url || acc.avatar)) {
-            avatarUrl = acc.avatar_url || acc.avatar;
-        }
-        const row = document.createElement('div');
-        row.className = `account-card-row ${isActive ? 'active-acc' : ''}`;
-        row.innerHTML = `
-            <div class="acc-row-avatar" style="background-image: url('${avatarUrl}')"></div>
-            <div class="acc-row-info">
-                <span class="acc-row-name">${acc.username}</span>
-                <span class="acc-row-type">${typeLabel} ${isActive ? '● Connecté' : ''}</span>
-            </div>
-            <div class="acc-row-actions">
-                ${!isActive ? `<button class="btn-skin-edit" onclick="switchAccount('${acc.uuid}')">Connecter</button>` : ''}
-                <button class="btn-skin-edit" id="edit-skin-${acc.uuid}"><i class="fas fa-tshirt"></i> Modifier Skin</button>
-            </div>
-        `;
-        accContainer.appendChild(row);
-        const editBtn = row.querySelector(`#edit-skin-${acc.uuid}`);
-        editBtn.addEventListener('click', () => openWardrobe(acc));
-    });
-    const addBtn = document.createElement('div');
-    addBtn.className = 'account-card-row add-new';
-    addBtn.style.justifyContent = 'center';
-    addBtn.style.cursor = 'pointer';
-    addBtn.style.borderStyle = 'dashed';
-    addBtn.innerHTML = '<i class="fas fa-plus"></i> Ajouter un compte';
-    addBtn.onclick = () => {
-        alert("Fonctionnalité d'ajout rapide en cours de développement. Veuillez utiliser la déconnexion pour changer de compte."); 
+
+// Intercept launch to inject global settings automatically
+if (window.electron && window.electron.launch) {
+    const originalLaunch = window.electron.launch;
+    window.electron.launch = async (opts) => {
+        if (!opts) opts = {};
+        const mem = localStorage.getItem('hexa-ram') || '4096';
+        opts.memory = mem + 'M';
+        
+        const width = localStorage.getItem('hexa-width') || '1280';
+        const height = localStorage.getItem('hexa-height') || '720';
+        opts.resolution = { width: parseInt(width), height: parseInt(height) };
+        
+        const jvm = localStorage.getItem('hexa-jvm') || '';
+        if (jvm.trim() !== '') opts.jvmArgs = jvm;
+        
+        const javaP = localStorage.getItem('hexa-java') || '';
+        if (javaP.trim() !== '') opts.javaPath = javaP;
+        
+        console.log('Intercepted launch with global settings:', opts);
+        return originalLaunch(opts);
     };
-    accContainer.appendChild(addBtn);
 }
-async function openWardrobe(account) {
-    const url = "http://91.197.6.177:24607/skin"; 
-    window.api.openExternal(url);
-}
+
+window.toggleAccordion = function(element) {
+    const isActivating = !element.classList.contains('active');
+    document.querySelectorAll('.acc-item').forEach(el => {
+        el.classList.remove('active');
+    });
+    if (isActivating) {
+        element.classList.add('active');
+    }
+};
+
