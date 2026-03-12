@@ -5,30 +5,30 @@
 
 ![Hexa Launcher Banner](src/assets/logo.png)
 
-## ✨ Key Features
+## Key Features
 
-### 🚀 Modern Modding Support
+### Modern Modding Support
 - **Multi-Loader Support**: Native handling for **Vanilla**, **Forge**, **NeoForge**, **Fabric**, and **Quilt**.
 - **Smart Version Logic**: Automatically filters stable releases for complex loaders like NeoForge to ensure stability.
 - **Modpack Browser**: Browse, download, and install modpacks directly from Modrinth or custom repositories.
 
-### 👥 Social Hub
+### Social Hub
 - **Friends System**: Add friends, see who is online, and join their games instantly.
 - **Integrated Chat**: Real-time messaging with your friends directly in the launcher.
 - **Party System**: Invite friends to your modded server with a single click.
 
-### 👕 Wardrobe
+### Wardrobe
 - **3D Skin Preview**: View and rotate your character in real-time.
 - **Skin Manager**: Upload and change your Minecraft skin instantly without leaving the app.
 
-### 🛠️ Advanced Tools
+### Advanced Tools
 - **Instance Isolation**: Each instance has its own mods, config, and resource packs.
 - **Auto-Updater**: The launcher keeps itself up-to-date automatically (via GitHub Releases).
 - **RAM Management**: Easy slider to allocate memory to Java.
 
 ---
 
-## 📦 Installation (For Developers)
+## Installation (For Developers)
 
 ### Prerequisites
 - **Node.js** (v18 or higher recommended)
@@ -53,7 +53,7 @@
 
 ---
 
-## 🏗️ Building for Production
+## Building for Production
 
 To create the executable installer (`.exe`) for Windows:
 
@@ -65,17 +65,17 @@ npm run dist
 
 ---
 
-## 🌐 API & Backend
+## API & Backend
 
 The launcher communicates with a PHP/Node.js backend for authentication and updates.
 Please refer to [API_GUIDE.md](API_GUIDE.md) for documentation on setting up the update server and version endpoints.
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
-## 📜 License
+## License
 
-[ISC](https://opensource.org/licenses/ISC) © <YOUR_NAME>
+[ISC](https://opensource.org/licenses/ISC) © <hg.studio>
