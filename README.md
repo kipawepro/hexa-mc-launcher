@@ -1,4 +1,4 @@
-# 🎮 HEXA Launcher
+# HEXA Launcher
 
 > **Limitless Gaming Experience**  
 > A next-generation Minecraft Launcher built with Electron, featuring integrated social tools, modpack management, and seamless updates.
