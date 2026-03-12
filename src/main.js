@@ -25,6 +25,8 @@ autoUpdater.autoInstallOnAppQuit = true;
 // ---------------------------
 
 const rpcClientId = '1462409497116016682';
+let rpcClient = null;
+let rpcStarted = false;
 
 // IPC Handlers for Updater
 ipcMain.handle('check-update', async () => {
@@ -201,7 +203,7 @@ if (!gotTheLock) {
             }
         });
         createWindow();
-        const iconPath = path.join(__dirname, 'assets', 'logo.ico');
+        const iconPath = path.join(__dirname, 'assets', 'icon.ico');
         const icon = nativeImage.createFromPath(iconPath);
         tray = new Tray(icon);
         const contextMenu = Menu.buildFromTemplate([
@@ -274,7 +276,7 @@ function createWindow() {
         height: 650,
         frame: false,
         show: false, // Start hidden to prevent white flash
-        icon: path.join(__dirname, 'assets', 'logo.ico'),
+        icon: path.join(__dirname, 'assets', 'icon.ico'),
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -1763,40 +1765,6 @@ ipcMain.on('close', (event) => {
 });
 ipcMain.on('open-external', (event, url) => {
     require('electron').shell.openExternal(url);
-});
-ipcMain.handle('check-update', async () => {
-    const currentVersion = app.getVersion(); 
-    try {
-        const response = await fetch(launcherConfigUrl);
-        if (!response.ok) throw new Error('Network response was not ok');
-        const data = await response.json();
-        if (data.success && data.config) {
-            const latestVersion = data.config.launcherVersion;
-            
-            // CONSTRUCT DOWNLOAD URL IF MISSING (Based on new JSON schema)
-            let downloadUrl = data.config.launcherDownloadUrl;
-            if (!downloadUrl) {
-                // Fallback: Assume it's in /storage/launcher/setup.exe relative to API base
-                 const apiBase = 'https://hgstudio.strator.gg';
-                 downloadUrl = `${apiBase}/storage/launcher/setup.exe`;
-            } else if (downloadUrl.startsWith('/')) {
-                 const apiBase = 'https://hgstudio.strator.gg';
-                 downloadUrl = apiBase + downloadUrl;
-            }
-
-            // Simple cleanup of version string just in case
-            const cleanLatest = latestVersion.replace(/^v/, '');
-            const cleanCurrent = currentVersion.replace(/^v/, '');
-
-            if (latestVersion && cleanLatest !== cleanCurrent) {
-                return { updateAvailable: true, version: latestVersion, url: downloadUrl };
-            }
-        }
-        return { updateAvailable: false };
-    } catch (error) {
-        console.error('Update check failed:', error);
-        return { error: error.message };
-    }
 });
 ipcMain.handle('install-update', async (event, url) => {
     const tempDir = app.getPath('temp');

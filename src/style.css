@@ -1,11 +1,11 @@
 :root {
-    --bg-color: #f1edee; /* SOFT OAT TWEAKED */
-    --card-bg: #f1edee;  /* New base white replacement */
-    --text-color: #060D0C; /* LUXE NOIR */
-    --accent-color: #060D0C; /* LUXE NOIR */
-    --secondary-bg: #e6e2e3; /* Slightly darker shift for new base */
-    --border-color: #d8d4d5; /* Darker border for new base */
-    --hover-shadow: 0 10px 30px rgba(6, 13, 12, 0.08);
+    --bg-color: #ffffff; /* PURE WHITE */
+    --card-bg: #ffffff;  /* PURE WHITE */
+    --text-color: #000000; /* PURE BLACK */
+    --accent-color: #000000; /* PURE BLACK */
+    --secondary-bg: #f5f5f5; /* Light Grey for subtle contrast */
+    --border-color: #e0e0e0; /* Light border */
+    --hover-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
 }
 
 * {
@@ -149,6 +149,10 @@ body.fullscreen .window-controls {
     z-index: 99999 !important;
     background: transparent !important;
     border-bottom: none !important;
+    /* Force full width for dragging */
+    width: 100%;
+    left: 0;
+    justify-content: flex-end; /* Align buttons to right, but allow drag region to fill space */
 }
 
 /* Fix drag region to not block clicks on buttons */
@@ -184,15 +188,70 @@ body.fullscreen .window-controls {
 
 /* BACKGROUND HEX PATTERN */
 .background-pattern {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: -1;
-    background-image: url("data:image/svg+xml,%3Csvg width='60' height='104' viewBox='0 0 60 104' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg stroke='%23000000' stroke-width='1' stroke-opacity='0.1'%3E%3Cpath d='M30 0l30 17.32v34.64L30 69.28 0 51.96V17.32L30 0zM30 103.92l30-17.32v-34.64L30 34.64 0 51.96v34.64l30 17.32z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-    opacity: 0.5;
+    display: none; /* Old background removed */
 }
+
+/* 1. LA GRILLE HÉXAGONALE BRILLANTE (Au dessus) */
+.hex-bg {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    z-index: -2; /* Au dessus des vagues */
+    pointer-events: none;
+    background-color: transparent;
+
+    /* Masque: les traits */
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l25.98 15v30L30 60 4.02 45V15z' fill-rule='evenodd' stroke='%23000' stroke-width='1' fill='none'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l25.98 15v30L30 60 4.02 45V15z' fill-rule='evenodd' stroke='%23000' stroke-width='1' fill='none'/%3E%3C/svg%3E");
+    -webkit-mask-size: 60px 60px;
+    mask-size: 60px 60px;
+
+    /* Brillance Kaki/Or (#707059) */
+    background: 
+        linear-gradient(135deg, 
+            transparent 0%,
+            transparent 35%,
+            rgba(112, 112, 89, 0.4) 45%,
+            rgba(112, 112, 89, 0.7) 50%,
+            rgba(112, 112, 89, 0.4) 55%,
+            transparent 65%,
+            transparent 100%
+        ),
+        rgba(0, 0, 0, 0.08); /* Traits gris de base */
+        
+    background-size: 300% 300%, 100% 100%;
+    background-repeat: no-repeat, repeat;
+    animation: flowShine 8s linear infinite;
+}
+
+@keyframes flowShine {
+    0% { background-position: 100% 100%, 0 0; }
+    100% { background-position: 0% 0%, 0 0; }
+}
+
+
+/* 2. L'EFFET HOLOGRAPHIQUE / VAPEUREUX (En dessous) */
+.light-wave {
+    position: fixed;
+    top: -50%; left: -50%; width: 200%; height: 200%;
+    z-index: -3; /* Tout au fond */
+    pointer-events: none;
+    opacity: 0.7;
+    
+    /* Les tâches de couleurs Bleu / Violet / Vert */
+    background: 
+        radial-gradient(circle at 20% 30%, rgba(175, 219, 255, 0.4), transparent 40%), /* Bleu */
+        radial-gradient(circle at 80% 70%, rgba(206, 175, 255, 0.3), transparent 40%), /* Violet */
+        radial-gradient(circle at 40% 80%, rgba(175, 255, 212, 0.3), transparent 40%); /* Vert */
+        
+    /* Animation douce de flottement */
+    animation: calmFloat 30s ease-in-out infinite alternate;
+}
+
+@keyframes calmFloat {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(-20px, 20px) scale(1.05); }
+}
+
 
 /* LAYOUT */
 .main-container {
@@ -2502,5 +2561,122 @@ input, textarea, [contenteditable] { user-select: auto !important; -webkit-user-
 a, .link-style {
     cursor: pointer;
     text-decoration: none;
+}
+
+/* Friend Chat Popup Fixes */
+.chat-popup {
+    display: none;
+    position: absolute;
+    bottom: 70px;
+    left: 20px;
+    width: 320px;
+    max-height: 400px;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+    z-index: 1000;
+    overflow: hidden;
+    flex-direction: column;
+    animation: popupSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes popupSlideUp {
+    from { opacity: 0; transform: translateY(20px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.chat-popup-header {
+    padding: 15px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--secondary-bg);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chat-popup-title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-color);
+}
+
+.chat-popup-close {
+    border: none;
+    background: transparent;
+    font-size: 16px;
+    color: #999;
+    cursor: pointer;
+    transition: color 0.2s;
+    line-height: 1;
+}
+
+.chat-popup-close:hover {
+    color: var(--text-color);
+}
+
+.chat-popup-body {
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.chat-menu-btn {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    padding: 12px 15px;
+    text-align: left;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    color: var(--text-color);
+}
+
+.chat-menu-btn:hover {
+    background: var(--secondary-bg);
+    transform: translateX(3px);
+    border-color: #999;
+}
+
+.chat-menu-btn i {
+    margin-right: 12px;
+    font-size: 14px;
+    color: #888;
+}
+
+.attach-item {
+    background: var(--card-bg);
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.2s;
+}
+
+.attach-item:hover {
+    border-color: var(--text-color);
+    background: var(--secondary-bg);
+}
+
+.attach-thumb {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
 }
 

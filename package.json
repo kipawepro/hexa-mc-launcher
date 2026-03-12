@@ -11,7 +11,8 @@
     "appId": "com.hexa.launcher",
     "productName": "HEXA Launcher",
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "src/assets/icon.ico"
     },
     "publish": [
       {

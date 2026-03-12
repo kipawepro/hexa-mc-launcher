@@ -203,11 +203,12 @@ window.InstanceSettings = {
             }
 
             // Hide Delete Button For Official Instances
-            const deleteBtn = document.querySelector('#instance-settings-modal button[onclick*="InstanceSettings.delete"]');
+            const deleteBtn = document.querySelector('#instance-settings-modal button[onclick*="InstanceSettings.deleteInstance"]');
             if (deleteBtn) {
-                deleteBtn.style.display = isOfficial ? 'none' : 'inline-block';
-                deleteBtn.style.opacity = isOfficial ? '0' : '1'; 
-                deleteBtn.style.pointerEvents = isOfficial ? 'none' : 'auto'; 
+                deleteBtn.style.display = isOfficial ? 'none' : 'block';
+                deleteBtn.style.width = isOfficial ? '0' : '100%'; 
+                if (isOfficial) deleteBtn.parentElement.style.display = 'none';
+                else deleteBtn.parentElement.style.display = 'flex';
             }
 
             // Reset & Populate Form
@@ -323,23 +324,7 @@ window.InstanceSettings = {
         document.getElementById('instance-settings-modal').style.display = 'none';
         this.currentId = null;
     },
-    
-    delete() {
-        if(!this.currentId) return;
-        
-        // Check official
-        if (OFFICIAL_INSTANCES.some(i => i.id === this.currentId)) {
-             window.HexaAlert("Error", "Official instances cannot be deleted.");
-             return;
-        }
 
-        if(confirm("Are you sure you want to delete this instance? This action cannot be undone.")) {
-            LibraryManager.delete(this.currentId);
-            this.close();
-            // Close details view if open
-            document.getElementById('instance-details-view').style.display = 'none';
-        }
-    },
     
     duplicate() {
         if(!this.currentId) return;
@@ -347,11 +332,12 @@ window.InstanceSettings = {
         this.close();
     },
 
-    delete() {
+    deleteInstance() {
         if(!this.currentId) return;
         // Settings modal is open, but we show confirm modal on top
         if(LibraryManager && LibraryManager.confirmDelete) {
             LibraryManager.confirmDelete(this.currentId);
+            // this.close(); // Keep settings open so user can cancel
         } else {
              if(confirm("Delete this instance?")) {
                  LibraryManager.delete(this.currentId);
@@ -4597,6 +4583,17 @@ window.resetAttachView = function() {
     document.getElementById('attach-title').innerText = 'ATTACHMENT';
 };
 
+// Close popup when clicking outside
+document.addEventListener('click', (e) => {
+    const p = document.getElementById('chat-attach-popup');
+    const btn = document.getElementById('btn-soc-plus');
+    if (p && p.style.display !== 'none') {
+        if (!p.contains(e.target) && (!btn || !btn.contains(e.target))) {
+            toggleAttachPopup(false);
+        }
+    }
+});
+
 window.showAttachModpacks = async function() {
     const list = document.getElementById('attach-list-content');
     const view = document.getElementById('attach-list-view');
@@ -4605,7 +4602,11 @@ window.showAttachModpacks = async function() {
     const title = document.getElementById('attach-title');
     
     // Ensure styles for list view
-    if(list) list.style.display = 'block';
+    if(list) {
+        list.style.display = 'flex';
+        list.style.flexDirection = 'column';
+        list.style.gap = '8px';
+    }
     
     menu.style.display = 'none';
     view.style.display = 'block';
