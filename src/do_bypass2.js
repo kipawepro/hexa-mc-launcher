@@ -1,0 +1,1 @@
+const fs = require('fs'); let b = fs.readFileSync('renderer.js', 'utf8'); b = b.replace(/if\\s*\\(\\s*type\\s*===\\s*'modpack'\\s*\\)\\s*\\{/, if(type === 'modpack') { console.log('[FRONTEND] Bypassing Name Modal! Direct Install.'); this.installModpack(project, project.title); return; ); fs.writeFileSync('renderer.js', b); console.log('Fixed', b.includes('Bypassing'));

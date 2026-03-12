@@ -1,0 +1,1 @@
+const fs = require('fs'); let r = fs.readFileSync('renderer.js', 'utf8'); r = r.replace('this.showToast(msg || \Installing \...\, percent, \'toast-\' + instance);', 'console.log(\'[IPC PROGRESS FIRED]\', data); this.showToast(msg || \Installing \...\, percent, \'toast-\' + instance);'); fs.writeFileSync('renderer.js', r); console.log('Patched');

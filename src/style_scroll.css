@@ -1,0 +1,28 @@
+
+/* CUSTOM SCROLLBAR */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+    background: transparent;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+    border-left: 1px solid #eee;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #333;
+    border: 1px solid #fff;
+    /* Brutalist: No radius */
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #000;
+}
+
+/* For Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #333 #f8f8f8;
+}

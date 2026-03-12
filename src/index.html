@@ -1,572 +1,374 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>hg.studio minecraft</title>
+    <title>HEXA Launcher</title>
+    <!-- Defer loading of non-critical CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" media="print" onload="this.media='all'">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript>
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    </noscript>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="new_design.css">
-    <link rel="stylesheet" href="pj_style.css">
-    <link rel="stylesheet" href="theme_style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        canvas { display: block; width: 100%; height: 100%; }
+
+        /* Loading Screen */
+        #app-loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #f1edee;
+            z-index: 99999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.5s ease-out;
+        }
+        .loading-logo {
+            width: 128px;
+            height: auto;
+            animation: pulse-logo 2s infinite;
+        }
+        @keyframes pulse-logo {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.9; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
 </head>
 <body>
-    <div id="intro-screen">
-        <img src="assets/logo.svg" alt="HG" class="intro-logo">
+    <!-- Loading Screen -->
+    <div id="app-loading-screen">
+        <img src="assets/logo.png" alt="Loading..." class="loading-logo">
     </div>
-    <div class="app-border">
-        <div class="video-background">
-           <video autoplay muted loop id="bg-video" poster="assets/background.jpg">
-                <source src="assets/cinematic.mp4" type="video/mp4">
-           </video>
-           <img id="bg-image" src="" alt="" style="display: none; width: 100%; height: 100%; object-fit: cover;">
-        </div>
-        <div class="video-overlay"></div>
-        <header class="main-header">
-            <div class="user-profile-btn" id="profile-trigger">
-                <div class="header-avatar" id="user-avatar-header"></div>
-                <div class="user-info-col">
-                    <span class="header-username" id="user-name-header">Steve</span>
-                    <span class="header-subtitle">HG Account</span>
-                </div>
-                <i class="fas fa-chevron-down profile-arrow"></i>
-            </div>
-            <div class="iphone-notch">
-                <div class="notch-content">HG.STUDIO</div>
-            </div>
-        </header>
-        <div class="container">
-            <div id="maintenance-screen" class="maintenance-container" style="display: none;">
-                <div class="maintenance-content">
-                    <div class="maintenance-icon">
-                        <i class="fas fa-tools"></i>
-                    </div>
-                    <h2>MAINTENANCE</h2>
-                    <p>Le launcher est actuellement en maintenance.</p>
-                    <p class="maintenance-sub">Revenez plus tard !</p>
-                </div>
-                <div class="maintenance-banners">
-                    <div class="banner-row row-1">
-                        <span>MAINTENANCE</span><span>MAINTENANCE</span><span>MAINTENANCE</span><span>MAINTENANCE</span>
-                    </div>
-                    <div class="banner-row row-2">
-                        <span>HG.STUDIO</span><span>HG.STUDIO</span><span>HG.STUDIO</span><span>HG.STUDIO</span>
-                    </div>
-                </div>
-            </div>
-            <div id="login-screen" class="login-container">
-                <div class="login-box-new">
-                    <img src="assets/logo.svg" class="login-logo" alt="Logo">
-                    <div class="login-title">CONNEXION</div>
-                    <div class="login-subtitle">Connectez-vous pour jouer</div>
-                    <div class="input-group">
-                        <input type="text" id="login-user" placeholder="Email ou Pseudo">
-                        <i class="fas fa-user input-icon"></i>
-                    </div>
-                    <div class="input-group">
-                        <input type="password" id="login-pass" placeholder="Mot de passe">
-                        <i class="fas fa-lock input-icon"></i>
-                    </div>
-                    <div class="login-checkbox-container">
-                        <label class="switch small">
-                            <input type="checkbox" id="stay-connected" checked>
-                            <span class="slider round"></span>
-                        </label>
-                        <span class="checkbox-label small">Rester connecté</span>
-                    </div>
-                    <button id="login-btn" class="login-btn-new">SE CONNECTER</button>
-                    <div class="divider-new">
-                        <span>OU</span>
-                    </div>
-                    <button id="microsoft-login-btn" class="microsoft-btn-new">
-                        <i class="fab fa-microsoft"></i> Compte Microsoft
-                    </button>
-                    <p id="login-error" class="error-msg"></p>
-                </div>
-            </div>
-            <div id="loading-overlay" class="loading-overlay" style="display: none;">
-                <div class="pig-container">
-                    <div class="pig-face">
-                        <div class="pig-snout"></div>
-                    </div>
-                </div>
-                <div class="loading-log" id="loading-log">Initializing...</div>
-            </div>
-            <div id="dashboard-screen" class="new-dashboard" style="display: none;">
-                <div class="bottom-action-bar">
-                    <div class="social-group">
-                        <button id="btn-map" class="social-btn" title="LiveMap"><i class="fas fa-map"></i></button>
-                        <button id="btn-discord" class="social-btn" title="Discord"><i class="fab fa-discord"></i></button>
-                        <button id="btn-instagram" class="social-btn" title="Instagram"><i class="fab fa-instagram"></i></button>
-                        <button id="btn-tiktok" class="social-btn" title="TikTok"><i class="fab fa-tiktok"></i></button>
-                        <button class="social-btn" title="Website"><i class="fas fa-globe"></i></button>
-                        <button id="btn-leane" class="social-btn special-leane" title="Pour toi" style="display: none;"><i class="fas fa-heart"></i></button>
-                    </div>
-                    <div class="center-column">
-                        <div class="version-selector-container">
-                            <div class="version-selector">
-                                <!-- Standard Modes -->
-                                <div class="version-option active" data-version="base" id="ver-base">
-                                    <span>HG S1</span>
-                                </div>
-                                <div class="version-option" data-version="enhanced" id="ver-enhanced">
-                                    <span>Enhanced</span>
-                                    <span class="badge-new">NEW</span>
-                                </div>
 
-                                <!-- ATM10 Mode -->
-                                <div class="version-option" data-version="atm10" id="ver-atm10" style="display: none;">
-                                    <span>All The Mods 10-5.5</span>
-                                    <span class="badge-new">NEW</span>
-                                </div>
+    <div class="window-controls" style="z-index: 50000; position: fixed; top: 0; right: 0; display: flex; align-items: center;">
+        <div class="drag-region"></div>
+        <!-- Nav Buttons -->
+        <div class="nav-controls" style="display:flex; gap:5px; margin-right: 20px; -webkit-app-region: no-drag; align-items: center;">
+            <!-- Upload Notification Button (Hidden by default) -->
+            <button id="update-btn" class="win-btn" style="display:none; color: #e74c3c; animation: pulse-update 2s infinite;" title="Update Available"><i class="fas fa-arrow-circle-down"></i></button>
+            
+            <button id="nav-back-btn" class="win-btn" disabled><i class="fas fa-chevron-left"></i></button>
+            <button id="nav-fwd-btn" class="win-btn" disabled><i class="fas fa-chevron-right"></i></button>
+        </div>
+        
+        <style>
+            @keyframes pulse-update {
+                0% { opacity: 1; transform: scale(1); }
+                50% { opacity: 0.7; transform: scale(1.1); }
+                100% { opacity: 1; transform: scale(1); }
+            }
+        </style>
+        
+        <button id="min-btn" class="win-btn"><i class="fas fa-minus"></i></button>
+        <button id="max-btn" class="win-btn"><i class="far fa-square"></i></button>
+        <button id="close-btn" class="win-btn"><i class="fas fa-times"></i></button>
+    </div>
 
-                                <!-- Hardcore Mode -->
-                                <div class="version-option" data-version="hardcore" id="ver-hardcore" style="display: none;">
-                                    <span>hg.hardcore</span>
-                                </div>
-                                
-                                <!-- Create Custom -->
-                                <div class="version-option special-create" id="btn-create-inst" style="border: 1px dashed rgba(255,255,255,0.3);">
-                                    <span>+ Créer Instance</span>
-                                </div>
-                                
-                                <div class="selector-highlight"></div>
-                            </div>
-                        </div>
-                        <div class="play-button-container">
-                            <button id="launch-btn" class="big-play-btn">
-                                JOUER
-                            </button>
-                            <div class="play-status" id="modpack-name">Prêt à jouer</div>
-                        </div>
-                    </div>
-                    <div class="settings-group">
-                         <button id="settings-btn" class="settings-icon-btn" title="Paramètres"><i class="fas fa-cog"></i></button>
-                    </div>
-                </div>
-                <div class="profile-dropdown" id="profile-dropdown">
-                    <div class="dropdown-item" id="dropdown-settings">
-                        <i class="fas fa-cog"></i> Paramètres
-                    </div>
-                    <div class="dropdown-item danger" id="dropdown-logout">
-                        <i class="fas fa-sign-out-alt"></i> Déconnexion
-                    </div>
-                </div>
-            </div>
-            <div id="settings-screen" class="settings-page" style="display: none;">
-                <div class="settings-layout">
-                    <div class="settings-sidebar">
-                        <div class="settings-header">
-                            <h2 class="settings-main-title">Paramètres</h2>
-                        </div>
-                        <nav class="settings-nav-menu">
-                            <div class="nav-item active" data-tab="account">
-                                <span class="nav-label">Compte</span>
-                            </div>
-                            <div class="nav-item" data-tab="minecraft">
-                                <span class="nav-label">Jeu</span>
-                            </div>
-                            <div class="nav-item" data-tab="java">
-                                <span class="nav-label">Java</span>
-                            </div>
-                            <div class="nav-item" data-tab="launcher">
-                                <span class="nav-label">Launcher</span>
-                            </div>
-                            <div class="nav-item" data-tab="about">
-                                <span class="nav-label">Mise à jour</span>
-                            </div>
-                        </nav>
-                        <div class="settings-sidebar-footer">
-                            <button id="close-settings-btn" class="done-btn">Terminé</button>
-                        </div>
-                    </div>
-                    <div class="settings-content">
-                        <div id="tab-account" class="tab-content active">
-                            <div class="tab-header">
-                                <h2>Paramètres de Compte</h2>
-                                <p>Gérez vos comptes connectés.</p>
-                            </div>
-                            <div class="account-section">
-                                <div class="account-type-header">
-                                    <div class="account-icon-ms"><i class="fas fa-users"></i> Comptes</div>
-                                </div>
-                                <div class="account-list" id="account-list-container">
-                                </div>
-                            </div>
-                        </div>
-                        <div id="tab-minecraft" class="tab-content">
-                            <div class="tab-header">
-                                <h2>Paramètres du Jeu</h2>
-                                <p>Options de lancement du jeu.</p>
-                            </div>
-                            <div class="setting-item">
-                                <label>Résolution du Jeu</label>
-                                <div class="resolution-inputs">
-                                    <input type="number" id="game-width" class="res-input" value="1280">
-                                    <span class="res-x">x</span>
-                                    <input type="number" id="game-height" class="res-input" value="720">
-                                </div>
-                            </div>
-                            <div class="setting-item toggle-row">
-                                <label for="s-fullscreen">Lancer en plein écran.</label>
-                                <label class="switch">
-                                    <input type="checkbox" id="s-fullscreen">
-                                    <span class="slider round"></span>
-                                </label>
-                            </div>
-                            <div class="setting-item toggle-row">
-                                <label for="s-autoconnect">Connexion auto au serveur.</label>
-                                <label class="switch">
-                                    <input type="checkbox" id="s-autoconnect">
-                                    <span class="slider round"></span>
-                                </label>
-                            </div>
-                            <div class="setting-item toggle-row">
-                                <div class="setting-text">
-                                    <label for="s-detached">Fermer le launcher au lancement.</label>
-                                    <p class="setting-desc">Si désactivé, le launcher restera ouvert en arrière-plan.</p>
-                                </div>
-                                <label class="switch">
-                                    <input type="checkbox" id="s-detached">
-                                    <span class="slider round"></span>
-                                </label>
-                            </div>
-                            <div class="manager-section">
-                                <div class="manager-header">
-                                    <h3>Resource Packs</h3>
-                                    <button class="btn-icon small open-folder-btn" data-type="resourcepacks" title="Ouvrir le dossier"><i class="fas fa-folder-open"></i></button>
-                                </div>
-                                <div class="drop-zone" id="drop-resourcepacks">
-                                    <i class="fas fa-boxes"></i>
-                                    <span>Glissez vos .zip ici</span>
-                                    <button class="browse-btn-small browse-trigger" data-type="resourcepacks">Parcourir</button>
-                                </div>
-                                <div class="file-list" id="list-resourcepacks"></div>
-                            </div>
-                            <div class="manager-section">
-                                <div class="manager-header">
-                                    <h3>Shaders</h3>
-                                    <button class="btn-icon small open-folder-btn" data-type="shaderpacks" title="Ouvrir le dossier"><i class="fas fa-folder-open"></i></button>
-                                </div>
-                                <div class="drop-zone" id="drop-shaderpacks">
-                                    <i class="fas fa-magic"></i>
-                                    <span>Glissez vos shaders .zip ici</span>
-                                    <button class="browse-btn-small browse-trigger" data-type="shaderpacks">Parcourir</button>
-                                </div>
-                                <div class="file-list" id="list-shaderpacks"></div>
-                            </div>
-                            <div class="manager-section">
-                                <div class="manager-header">
-                                    <h3>Schematics</h3>
-                                    <button class="btn-icon small open-folder-btn" data-type="schematics" title="Ouvrir le dossier"><i class="fas fa-folder-open"></i></button>
-                                </div>
-                                <div class="drop-zone" id="drop-schematics">
-                                    <i class="fas fa-drafting-compass"></i>
-                                    <span>Glissez vos .schematic / .litematic ici</span>
-                                    <button class="browse-btn-small browse-trigger" data-type="schematics">Parcourir</button>
-                                </div>
-                                <div class="file-list" id="list-schematics"></div>
-                            </div>
-                        </div>
-                        <div id="tab-java" class="tab-content">
-                            <div class="tab-header">
-                                <h2>Paramètres Java</h2>
-                                <p>Configuration Java et mémoire.</p>
-                            </div>
-                            <div class="setting-item">
-                                <div class="ram-header" style="margin-bottom: 5px;">
-                                    <label>Allocation Mémoire <span style="color: #aaa; font-weight: normal; font-size: 0.9em;">(Recommandé: 6144 MB)</span></label>
-                                    <span class="ram-display" style="color:var(--primary-pink); font-weight:bold;"><span id="ram-display-val">4096</span> MB</span>
-                                </div>
-                                <div class="ram-slider-container">
-                                    <input type="range" id="java-ram-slider" min="1024" max="16384" step="512" class="styled-slider">
-                                </div>
-                                <div class="ram-stats">
-                                    <span>Disponible : <span id="sys-ram-free">--</span> GB</span>
-                                    <span>Total : <span id="sys-ram-total">--</span> GB</span>
-                                </div>
-                            </div>
-                            <hr style="border:0; border-top:1px solid rgba(255,255,255,0.05); margin: 20px 0;">
-                            <div class="setting-item">
-                                <label style="margin-bottom: 15px; display:block;">Versions Java</label>
-                                <div class="java-version-card">
-                                    <div class="java-card-header">
-                                        <span>Java 21 location</span>
-                                    </div>
-                                    <input type="text" class="java-path-input" id="java-path-21" placeholder="/path/to/java">
-                                    <div class="java-actions">
-                                        <button id="btn-install-21" class="java-action-btn btn-install-rec" data-version="21"><i class="fas fa-download"></i> Install recommended</button>
-                                        <button id="btn-detect-21" class="java-action-btn btn-secondary" data-version="21"><i class="fas fa-search"></i> Detect</button>
-                                        <button id="btn-browse-21" class="java-action-btn btn-secondary" data-target="java-path-21"><i class="fas fa-folder-open"></i> Browse</button>
-                                        <button id="btn-test-21" class="java-action-btn btn-secondary" data-target="java-path-21"><i class="fas fa-play"></i> Test</button>
-                                    </div>
-                                </div>
-                                <div class="java-version-card">
-                                    <div class="java-card-header">
-                                        <span>Java 17 location (Recommandé 1.20.1)</span>
-                                    </div>
-                                    <input type="text" class="java-path-input" id="java-path-17" placeholder="/path/to/java">
-                                    <div class="java-actions">
-                                        <button id="btn-install-17" class="java-action-btn btn-install-rec" data-version="17"><i class="fas fa-download"></i> Install recommended</button>
-                                        <button id="btn-detect-17" class="java-action-btn btn-secondary" data-version="17"><i class="fas fa-search"></i> Detect</button>
-                                        <button id="btn-browse-17" class="java-action-btn btn-secondary" data-target="java-path-17"><i class="fas fa-folder-open"></i> Browse</button>
-                                        <button id="btn-test-17" class="java-action-btn btn-secondary" data-target="java-path-17"><i class="fas fa-play"></i> Test</button>
-                                    </div>
-                                </div>
-                                <div class="java-version-card">
-                                    <div class="java-card-header">
-                                        <span>Java 8 location</span>
-                                    </div>
-                                    <input type="text" class="java-path-input" id="java-path-8" placeholder="/path/to/java">
-                                    <div class="java-actions">
-                                        <button id="btn-install-8" class="java-action-btn btn-install-rec" data-version="8"><i class="fas fa-download"></i> Install recommended</button>
-                                        <button id="btn-detect-8" class="java-action-btn btn-secondary" data-version="8"><i class="fas fa-search"></i> Detect</button>
-                                        <button id="btn-browse-8" class="java-action-btn btn-secondary" data-target="java-path-8"><i class="fas fa-folder-open"></i> Browse</button>
-                                        <button id="btn-test-8" class="java-action-btn btn-secondary" data-target="java-path-8"><i class="fas fa-play"></i> Test</button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="setting-item">
-                                <label>Arguments JVM</label>
-                                <div class="input-container">
-                                    <input type="text" id="java-args-input" class="text-input-styled" placeholder="-XX:+UnlockExperimentalVMOptions ...">
-                                </div>
-                            </div>
-                        </div>
-                        <div id="tab-launcher" class="tab-content">
-                            <div class="tab-header">
-                                <h2>Paramètres Launcher</h2>
-                                <p>Personnalisation et options.</p>
-                            </div>
-                            <div class="setting-item">
-                                <label>Thème et Ambiance</label>
-                                <div id="theme-carousel-container" class="theme-carousel-container">
-                                    <div class="loading-themes">Chargement des thèmes...</div>
-                                </div>
-                            </div>
-                            <div class="setting-item toggle-row" id="setting-leane-container" style="display: none;">
-                                <div class="setting-text">
-                                    <label for="s-love-popup">Afficher le message d'amour au lancement</label>
-                                    <p class="setting-desc">Si désactivé, le popup ne s'affichera plus.</p>
-                                </div>
-                                <label class="switch">
-                                    <input type="checkbox" id="s-love-popup" checked>
-                                    <span class="slider round"></span>
-                                </label>
-                            </div>
-                            <div class="setting-item toggle-row">
-                                <div class="setting-text">
-                                    <label for="s-prerelease">Autoriser les versions Bêta.</label>
-                                    <p class="setting-desc">Reçoit les mises à jour avant tout le monde (Instable).</p>
-                                </div>
-                                <label class="switch">
-                                    <input type="checkbox" id="s-prerelease">
-                                    <span class="slider round"></span>
-                                </label>
-                            </div>
-                            <div class="setting-item">
-                                <label>Dossier de Données</label>
-                                <div class="file-input-group">
-                                    <div class="file-path-display">
-                                        <i class="fas fa-folder"></i>
-                                        <input type="text" id="data-dir-input" readonly>
-                                    </div>
-                                    <button class="file-browse-btn" id="open-data-dir-btn">Ouvrir</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div id="tab-about" class="tab-content">
-                            <div class="tab-header">
-                                <h2>Mise à jour</h2>
-                                <p>Gérez les mises à jour système.</p>
-                            </div>
-                            <div class="update-section-files" style="padding: 20px 0;">
-                                <div class="current-version-card" style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
-                                    <span class="version-label" style="font-weight: 600;">Version actuelle</span>
-                                    <span class="version-number" id="app-version-display" style="font-family: monospace; color: #888;">v--</span>
-                                </div>
-                                <button id="check-update-btn" class="action-btn" style="width: 100%; padding: 15px; background: #333; text-align: center;">
-                                    <i class="fas fa-sync-alt"></i> Rechercher une mise à jour
-                                </button>
-                                <p id="update-status" class="status-msg" style="margin-top: 15px; text-align: center; color: #aaa; min-height: 20px;"></p>
-                            </div>
-                            <div class="credits-mini" style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px; text-align: center; color: #444; font-size: 11px;">
-                                HG Launcher - Copyright © 2025 HG.Studio
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div id="map-screen" class="map-overlay" style="display: none;">
-        <div class="map-header">
-                <h2>Carte du Serveur</h2>
-                <button id="close-map-btn" class="close-action-btn"><i class="fas fa-times"></i></button>
-        </div>
-        <iframe id="map-iframe" src="" frameborder="0" class="map-frame"></iframe>
-    </div>
-    <div id="update-popup" class="update-popup-overlay" style="display: none;">
-        <div class="update-popup-content">
-            <button id="update-popup-close-btn" class="update-popup-close-btn"><i class="fas fa-times"></i></button>
-            <div class="update-icon">
-                <i class="fas fa-cloud-download-alt"></i>
-            </div>
-            <h2>Mise à jour disponible !</h2>
-            <p>Une nouvelle version du launcher est disponible (<span id="popup-new-version">vX.X.X</span>).</p>
-            <p class="sub-text">Cette mise à jour est requise pour continuer à jouer.</p>
-            <div class="popup-actions">
-                <button id="popup-update-btn" class="update-confirm-btn">
-                    <i class="fas fa-download"></i> INSTALLER MAINTENANT
-                </button>
-            </div>
-            <p id="popup-update-status" class="status-msg"></p>
-        </div>
-    </div>
-    <div id="love-popup" style="display: none;">
-        <div class="love-content">
-            <h1 class="love-title">Coucou chat <i class="fas fa-heart"></i></h1>
-            <p class="love-text">Je t'aime fort mon amour !! amuse toi bien hihi !</p>
-            <div class="love-actions">
-                <label class="love-switch">
-                    <input type="checkbox" id="love-popup-checkbox">
-                    <span class="love-slider"></span>
-                    <span class="love-label">Ne plus afficher</span>
-                </label>
-                <button id="love-close-btn" class="love-btn">Mouaahh bisous ! <i class="fas fa-kiss-wink-heart"></i></button>
-            </div>
-        </div>
-    </div>
-    <div id="love-footer" style="display: none;">
-        je t'aime fort princesse oublie le jamais ! <i class="fas fa-heart"></i>
-    </div>
-    <div class="window-controls-header">
-        <button id="update-notify-btn" title="Mise à jour disponible" style="display: none; color: var(--primary-pink); animation: pulse 2s infinite;">
-            <i class="fas fa-sync-alt"></i>
-        </button>
-        <button id="minimize-btn" title="Minimize"><i class="fas fa-minus"></i></button>
-        <button id="close-btn" title="Close"><i class="fas fa-times"></i></button>
-    </div>
-    <div id="skin-import-popup" class="modal-overlay" style="display: none; z-index: 9100;">
-        <div class="import-content">
-            <div class="import-header">
-                <h3>Importer un Skin</h3>
-                <button id="close-import-btn" class="close-action-btn"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="import-body">
-                <div class="import-preview">
-                    <canvas id="import-canvas" width="200" height="300"></canvas>
-                    <p class="drag-hint">Tourner le personnage</p>
-                </div>
-                <div class="import-options">
-                    <div class="option-group">
-                        <label>Taille des bras</label>
-                        <div class="model-selector">
-                            <label class="model-option">
-                                <input type="radio" name="import-model" value="default" checked>
-                                <span class="model-btn">Standard (Wide)</span>
-                            </label>
-                            <label class="model-option">
-                                <input type="radio" name="import-model" value="slim">
-                                <span class="model-btn">Slim (Alex)</span>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="input-group" id="cape-selector-group" style="display:none; margin-top: 15px;">
-                        <label>Choisir une Cape</label>
-                        <div id="cape-list" class="cape-list">
-                        </div>
-                    </div>
-                    <div class="import-footer">
-                        <button id="cancel-import-btn" class="secondary-btn">Annuler</button>
-                        <button id="confirm-import-btn" class="primary-btn">Sauvegarder</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div id="skin-wardrobe-modal" class="modal-overlay" style="display: none;">
-        <div class="wardrobe-content">
-            <div class="wardrobe-header">
-                <h2>Garde-Robe</h2>
-                <button id="close-wardrobe-btn" class="close-action-btn"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="wardrobe-body">
-                <div class="wardrobe-preview-column">
-                    <canvas id="skin-canvas" width="300" height="400"></canvas>
-                    <div class="preview-controls">
-                        <button id="rotate-skin-btn" title="Tourner"><i class="fas fa-sync-alt"></i></button>
-                        <button id="toggle-cape-btn" title="Cape"><i class="fas fa-user-secret"></i></button>
-                    </div>
-                </div>
-                <div class="wardrobe-selection-column">
-                    <div class="wardrobe-actions">
-                        <button id="import-skin-btn"><i class="fas fa-upload"></i> IMPORTER UN SKIN</button>
-                        <button id="save-skin-btn"><i class="fas fa-save"></i> APPLIQUER</button>
-                    </div>
-                    <h3>Mes Skins</h3>
-                    <div id="saved-skins-grid" class="skin-grid" style="flex: 0 0 100px; max-height: 120px; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 20px;">
-                        <p class="empty-hint">Aucun skin sauvegardé</p>
-                    </div>
-                    <h3>Skins par défaut</h3>
-                    <div id="skin-presets-grid" class="skin-grid">
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- MODRINTH BROWSER OVERLAY -->
-    <div id="browser-tab" class="browser-layout" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: white; z-index: 5000; flex-direction: column;">
-         <div class="browser-header" style="display: flex; align-items: center; padding: 20px 40px; border-bottom: 1px solid #eee; gap: 30px;">
-            <div class="browser-nav-tabs" style="display: flex; gap: 20px;">
-                <button class="nav-tab-btn active" data-type="modpack" style="border:none; background:none; font-weight:800; color:#000; cursor:pointer;">MODPACKS</button>
-                <button class="nav-tab-btn" data-type="mod" style="border:none; background:none; font-weight:800; color:#999; cursor:pointer;">MODS</button>
-                <button class="nav-tab-btn" data-type="resourcepack" style="border:none; background:none; font-weight:800; color:#999; cursor:pointer;">RESOURCE PACKS</button>
-                <button class="nav-tab-btn" data-type="shader" style="border:none; background:none; font-weight:800; color:#999; cursor:pointer;">SHADERS</button>
-            </div>
-            <div class="browser-search-container" style="flex: 1; display: flex; max-width: 400px; gap: 0;">
-                <input type="text" id="browser-search" placeholder="Search..." class="hex-input" style="flex:1; padding: 10px; border: 1px solid #eee;">
-                <button class="search-icon-btn" id="do-search-btn" style="width: 50px; background: #000; color: white; border: none; cursor: pointer;">🔍</button>
-            </div>
-            <button class="secondary-btn" id="close-browser-btn" style="margin-left: auto; background: #000; color: #fff; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer;">EXIT</button>
-        </div>
+    <!-- Hex Background -->
+    <div class="background-pattern"></div>
 
-        <div class="browser-layout-inner" style="display: flex; height: 100%; overflow: hidden;">
-            <aside class="browser-sidebar" style="width: 260px; padding: 30px; background: #fff; border-right: 1px solid #eee; overflow-y: auto;">
-                <div class="filter-group">
-                    <h4>GAME VERSION</h4>
-                    <div class="filter-list" id="list-version">
-                        <div class="filter-link active" data-value="">All Versions</div>
-                        <div class="filter-link" data-value="1.21.4">1.21.4</div>
-                        <div class="filter-link" data-value="1.21.1">1.21.1</div>
-                        <div class="filter-link" data-value="1.20.1">1.20.1</div>
-                        <div class="filter-link" data-value="1.19.2">1.19.2</div>
-                        <div class="filter-link" data-value="1.18.2">1.18.2</div>
-                    </div>
-                </div>
+    <!-- Hex Background -->
+    <div class="background-pattern"></div>
 
-                <div class="filter-group">
-                    <h4>LOADER</h4>
-                    <div class="filter-list" id="list-loader">
-                        <div class="filter-link active" data-value="">Any Loader</div>
-                        <div class="filter-link" data-value="fabric">Fabric</div>
-                        <div class="filter-link" data-value="forge">Forge</div>
-                        <div class="filter-link" data-value="neoforge">NeoForge</div>
-                        <div class="filter-link" data-value="quilt">Quilt</div>
+    <!-- Login Overlay -->
+    <div id="login-overlay" class="login-overlay">
+        <div class="login-box">
+            <div class="login-header">
+                <h1>LOGIN</h1>
+                <p>Welcome back, Trooper.</p>
+            </div>
+            
+            <div class="input-container">
+                <div class="input-group">
+                    <input type="text" id="login-username" placeholder="USERNAME" autocomplete="off">
+                </div>
+                <div class="input-group">
+                    <input type="password" id="login-password" placeholder="PASSWORD" autocomplete="off">
+                </div>
+            </div>
+            
+            <button id="login-submit-btn" class="cta-btn full-width">INITIALIZE SESSION</button>
+            <p id="login-error" class="error-msg"></p>
+        </div>
+    </div>
+
+    <!-- Instance Settings Modal -->
+    <div id="instance-settings-modal" class="modal-overlay" style="display: none; z-index: 20000;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2>Instance Configuration</h2>
+                <button class="close-modal-btn" onclick="InstanceSettings.close()">?</button>
+            </div>
+            <div class="modal-body" style="padding: 20px; background: var(--bg-color);">
+                  <div class="settings-accordion">
+                      <!-- General Settings -->
+                      <div class="acc-item active" onclick="toggleAccordion(this)">
+                          <div class="acc-header">
+                              <i class="fas fa-cube"></i>
+                              <span style="flex:1;">General</span>
+                              <i class="fas fa-chevron-down acc-arrow"></i>
+                          </div>
+                          <div class="acc-content" onclick="event.stopPropagation()">
+                              <div class="setting-group" style="padding-bottom:15px;">
+                                  <label style="display:block; margin-bottom: 10px; color:#aaa; font-size:12px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Instance Name</label>
+                                  <input type="text" id="inst-set-name" class="hex-input" style="width: 100%;  padding: 12px;    outline: none; font-family: 'Montserrat', sans-serif;">
+                              </div>
+                              <div style="display:flex; gap:20px;">
+                                  <div class="setting-group" style="flex:1;">
+                                      <label style="display:block; margin-bottom: 10px; color:#aaa; font-size:12px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Loader Architecture</label>
+                                      <select id="inst-set-loader" class="hex-select" disabled style="width: 100%;  padding: 12px;    outline: none; font-family: 'Montserrat', sans-serif;">
+                                          <option value="vanilla">Vanilla</option>
+                                          <option value="fabric">Fabric</option>
+                                          <option value="forge">Forge</option>
+                                          <option value="neoforge">NeoForge</option>
+                                          <option value="quilt">Quilt</option>
+                                      </select>
+                                  </div>
+                                  <div class="setting-group" style="flex:1;">
+                                      <label style="display:block; margin-bottom: 10px; color:#aaa; font-size:12px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Game Version</label>
+                                      <input type="text" id="inst-set-version" class="hex-input" disabled style="width: 100%;  padding: 12px;    outline: none; font-family: 'Montserrat', sans-serif;">
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+
+                      <!-- Java Settings -->
+                      <div class="acc-item" onclick="toggleAccordion(this)">
+                          <div class="acc-header">
+                              <i class="fas fa-coffee"></i>
+                              <span style="flex:1;">Java Runtime</span>
+                              <i class="fas fa-chevron-down acc-arrow"></i>
+                          </div>
+                          <div class="acc-content" onclick="event.stopPropagation()">
+                              <div class="setting-group" style="padding-bottom:15px;">
+                                  <label style="display:block; margin-bottom: 10px; color:#aaa; font-size:12px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Java Executable</label>
+                                  <select id="inst-set-java" class="hex-select" style="width: 100%;  padding: 12px;    outline: none; font-family: 'Montserrat', sans-serif; margin-bottom: 10px;">
+                                      <option value="auto">Auto-Detect (Recommended)</option>
+                                      <option value="8">Java 8 (Legacy 1.16-)</option>
+                                      <option value="17">Java 17 (Standard 1.17+)</option>
+                                      <option value="21">Java 21 (Modern 1.20.5+)</option>
+                                      <option value="custom">Custom Path...</option>
+                                  </select>
+                                  <input type="text" id="inst-set-java-path" class="hex-input" placeholder="C:\Path\To\javaw.exe" style="display:none; width: 100%;  padding: 12px;    outline: none; font-family: 'Montserrat', sans-serif;">
+                              </div>
+                              <div class="setting-group">
+                                  <label style="display:block; margin-bottom: 10px; color:#aaa; font-size:12px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Custom JVM Arguments</label>
+                                  <textarea id="inst-set-jvm" class="hex-input" placeholder="-XX:+UseG1GC ..." style="width: 100%; height: 60px;  padding: 12px;    outline: none; font-family: 'Consolas', monospace; font-size: 13px; resize: vertical;"></textarea>
+                              </div>
+                          </div>
+                      </div>
+
+                      <!-- Resource Management -->
+                      <div class="acc-item" onclick="toggleAccordion(this)">
+                          <div class="acc-header">
+                              <i class="fas fa-microchip"></i>
+                              <span style="flex:1;">Resource Management</span>
+                              <i class="fas fa-chevron-down acc-arrow"></i>
+                          </div>
+                          <div class="acc-content" onclick="event.stopPropagation()">
+                              <div class="setting-group" style="padding-bottom:15px;">
+                                  <label style="display:block; margin-bottom: 15px; color:#aaa; font-size:12px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Allocated Memory (RAM)</label>
+                                  <div class="ram-control" style="display:flex; align-items:center; gap:20px;">
+                                      <input type="range" id="inst-set-ram" min="1024" max="16384" step="512" value="4096" class="hex-slider" style="flex:1;">
+                                      <span id="inst-set-ram-val" style="min-width:80px; font-weight:800; font-size:16px;  text-align:right;">4.0 GB</span>
+                                  </div>
+                              </div>
+                              <div style="display:flex; gap:20px;">
+                                  <div class="setting-group" style="flex:1;">
+                                      <label style="display:block; margin-bottom: 10px; color:#aaa; font-size:12px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Resolution Width</label>
+                                      <input type="number" id="inst-set-width" class="hex-input" value="1280" style="width: 100%;  padding: 12px;    outline: none; font-family: 'Montserrat', sans-serif;">
+                                  </div>
+                                  <div class="setting-group" style="flex:1;">
+                                      <label style="display:block; margin-bottom: 10px; color:#aaa; font-size:12px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Resolution Height</label>
+                                      <input type="number" id="inst-set-height" class="hex-input" value="720" style="width: 100%;  padding: 12px;    outline: none; font-family: 'Montserrat', sans-serif;">
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+
+                      <!-- Launch Hooks -->
+                      <div class="acc-item" onclick="toggleAccordion(this)">
+                          <div class="acc-header">
+                              <i class="fas fa-plug"></i>
+                              <span style="flex:1;">Launch Hooks</span>
+                              <i class="fas fa-chevron-down acc-arrow"></i>
+                          </div>
+                          <div class="acc-content" onclick="event.stopPropagation()">
+                              <div class="setting-group" style="padding-bottom:15px;">
+                                  <label style="display:block; margin-bottom: 8px; color:#aaa; font-size:12px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Pre Launch Script</label>
+                                  <input type="text" id="inst-set-hook-pre" class="hex-input" placeholder="Path or command..." style="width: 100%;  padding: 12px; font-family: 'Consolas', monospace; font-size:13px;">
+                              </div>
+                              <div class="setting-group" style="padding-bottom:15px;">
+                                  <label style="display:block; margin-bottom: 8px; color:#aaa; font-size:12px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Wrapper Command</label>
+                                  <input type="text" id="inst-set-hook-wrapper" class="hex-input" placeholder="e.g. mangohud" style="width: 100%;  padding: 12px; font-family: 'Consolas', monospace; font-size:13px;">
+                              </div>
+                              <div class="setting-group">
+                                  <label style="display:block; margin-bottom: 8px; color:#aaa; font-size:12px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Post Exit Script</label>
+                                  <input type="text" id="inst-set-hook-post" class="hex-input" placeholder="Path or command..." style="width: 100%;  padding: 12px; font-family: 'Consolas', monospace; font-size:13px;">
+                              </div>
+                          </div>
+                      </div>
+
+                      <!-- Danger Zone -->
+                      <div class="acc-item" onclick="toggleAccordion(this)">
+                          <div class="acc-header" style="color: #d00;">
+                              <i class="fas fa-exclamation-triangle"></i>
+                              <span style="flex:1;">Danger Zone</span>
+                              <i class="fas fa-chevron-down acc-arrow"></i>
+                          </div>
+                          <div class="acc-content" onclick="event.stopPropagation()">
+                              <div style="display:flex; gap:10px; margin-top:10px;">
+                                  <button class="secondary-btn" style="flex:1; border-color:#d00; color:#d00;" onclick="InstanceSettings.delete()">DELETE INSTANCE</button>
+                                  <button class="secondary-btn" style="flex:1;" onclick="InstanceSettings.duplicate()">DUPLICATE</button>
+                              </div>
+                          </div>
+                      </div>
+
+                  </div>
+              </div>
+              <div class="modal-footer">
+                <button class="secondary-btn" onclick="InstanceSettings.close()">CANCEL</button>
+                <button class="cta-btn" onclick="InstanceSettings.save()">SAVE CONFIGURATION</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Layout -->
+    <div class="main-container">
+        
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="top-section">
+                <div class="logo-container">
+                    <img src="assets/logo.png" alt="HEXA MC" class="logo-img">
+                </div>
+                <nav>
+                    <div class="nav-item active" data-tab="home">Fast Launch</div>
+                    <div class="nav-item" data-tab="content">Content</div>
+                    <div class="nav-item" data-tab="friends">Friends</div>
+                    <div class="nav-item" data-tab="wardrobe">Wardrobe</div>
+                    <div class="nav-item" data-tab="settings">Settings</div>
+                </nav>
+            </div>
+            
+                        <div class="user-status" id="bottom-user-status" title="Click to Logout" style="cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.05)';" onmouseout="this.style.background='transparent';">
+                <div class="user-avatar" id="sidebar-avatar">
+                   <!-- Image injected by JS -->
+                </div>
+                <div class="user-details">
+                    <h3 id="sidebar-username">GUEST</h3>
+                    <span class="status">OFFLINE</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Content -->
+        <main class="content-area">
+            
+            <!-- HOME TAB (Dashboard) -->
+            <section id="home-tab" class="tab-section scroll-section home-layout active">
+                <div class="hero-text">
+                    <h1>Ready To<br>Breach?</h1>
+                    <p>Select your entry point. The Hexa Network offers optimized performance and verified community mods.</p>
+                    
+                    <div class="controls-wrapper">
+                        <select id="version-selector" class="version-dropdown">
+                            <option value="">Loading instances...</option>
+                        </select>
+                        
+                        <div class="launch-status">
+                            <button id="play-btn" class="cta-btn">LAUNCH GAME</button>
+                        </div>
+                        <div style="margin-top: 10px; font-size: 11px; color: #999;" id="progress-text">
+                            Waiting for command...
+                        </div>
                     </div>
                 </div>
                 
-                 <div class="filter-group">
-                    <h4>ENVIRONMENT</h4>
-                    <div class="filter-list" id="list-env">
-                        <div class="filter-link active" data-value="">Any Side</div>
-                        <div class="filter-link" data-value="client">Client</div>
-                        <div class="filter-link" data-value="server">Server</div>
+                <div class="skin-viewer-container">
+                     <!-- Canvas injected by JS or hardcoded -->
+                     <canvas id="skin-container"></canvas>
+                </div>
+            </section>
+
+            <!-- CONTENT TAB (Library System) -->
+            <section id="content-tab" class="tab-section scroll-section">
+                <div class="library-header">
+                    <div class="header-text">
+                        <h2>MY LIBRARY</h2>
+                        <p style="color:#666; font-weight:500;">Manage your instances</p>
+                    </div>
+                    <div class="library-actions">
+                        <button class="secondary-btn" id="btn-browse-repo">BROWSE CONTENT</button>
+                        <button class="secondary-btn" id="btn-create-inst" style="background:black; color:#ffffff;">+ CREATE NEW</button>
                     </div>
                 </div>
-                
-                 <div class="filter-group">
+
+                <div class="content-grid" id="library-grid">
+                    <!-- Instances injected via JS -->
+                </div>
+            </section>
+
+            <!-- BROWSER TAB (Modrinth) -->
+            <section id="browser-tab" class="tab-section">
+                <!-- Top Header: Tabs & Search -->
+                 <div class="browser-header">
+                    <div class="browser-nav-tabs">
+                        <button class="nav-tab-btn active" data-type="modpack">MODPACKS</button>
+                        <button class="nav-tab-btn" data-type="mod">MODS</button>
+                        <button class="nav-tab-btn" data-type="resourcepack">RESOURCE PACKS</button>
+                        <button class="nav-tab-btn" data-type="shader">SHADERS</button>
+                    </div>
+                    <div class="browser-search-container">
+                        <input type="text" id="browser-search" placeholder="Search..." class="hex-input">
+                        <button class="search-icon-btn" id="do-search-btn">??</button>
+                    </div>
+                    <button class="secondary-btn" id="back-to-lib" style="margin-left: 10px;">EXIT</button>
+                </div>
+
+                <div class="browser-layout">
+                    <!-- Sidebar Filters -->
+                    <aside class="browser-sidebar">
+                        
+                        <!-- Version Filter -->
+                        <div class="filter-group">
+                            <h4>GAME VERSION</h4>
+                            <div class="filter-list" id="list-version">
+                                <div class="filter-link active" data-value="">All Versions</div>
+                                <!-- Versions injected by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Loader Filter -->
+                        <div class="filter-group">
+                            <h4>LOADER</h4>
+                            <div class="filter-list" id="list-loader">
+                                <div class="filter-link active" data-value="">Any Loader</div>
+                                <div class="filter-link" data-value="fabric">Fabric</div>
+                                <div class="filter-link" data-value="forge">Forge</div>
+                                <div class="filter-link" data-value="neoforge">NeoForge</div>
+                                <div class="filter-link" data-value="quilt">Quilt</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Environment Filter (Matches Screenshot "Any Side") -->
+                         <div class="filter-group">
+                            <h4>ENVIRONMENT</h4>
+                            <div class="filter-list" id="list-env">
+                                <div class="filter-link active" data-value="">Any Side</div>
+                                <div class="filter-link" data-value="client">Client</div>
+                                <div class="filter-link" data-value="server">Server</div>
+                            </div>
+                        </div>
+                        
+<div class="filter-group">
                     <h4>CATEGORIES</h4>
                     <div class="filter-list" id="list-category">
                         <div class="filter-link active" data-value="">All Categories</div>
@@ -582,73 +384,901 @@
                         <div class="filter-link" data-value="technology">Technology</div>
                     </div>
                 </div>
-            </aside>
 
-            <div class="browser-results" style="flex: 1; padding: 30px; overflow-y: auto; background: #fff;">
-                <div class="content-grid" id="browser-grid" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px;">
+                    </aside>
+
                     <!-- Results -->
-                </div>
-                
+                    <div class="browser-results" id="browser-scroll-area">
+                        <div id="browser-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
+                            <!-- Injected Items -->
+                        </div>
+                        
+                        
                   <div id="browser-pagination" style="display: flex; justify-content: center; align-items: center; padding: 20px; gap: 20px;">
-                      <button id="btn-prev-page" style="padding: 10px 20px; background: #222; color: #fff; border: 1px solid #444; border-radius: 8px; cursor: pointer; font-family: 'Outfit'; transition: background 0.2s;">Précédent</button>
-                      <span id="page-indicator" style="color: #000; font-family: 'Space Grotesk'; font-weight: bold;">Page 1</span>
-                      <button id="btn-next-page" style="padding: 10px 20px; background: #222; color: #fff; border: 1px solid #444; border-radius: 8px; cursor: pointer; font-family: 'Outfit'; transition: background 0.2s;">Suivant</button>
+                      <button id="btn-prev-page" style="padding: 10px 20px; background: #fff; color: #000; border: 2px solid #eee; border-radius: 4px; cursor: pointer; font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 13px; transition: all 0.2s;">PREVIOUS</button>
+                      <span id="page-indicator" style="color: #000; font-family: 'Montserrat', sans-serif; font-weight: 900; font-size: 14px;">PAGE 1</span>
+                      <button id="btn-next-page" style="padding: 10px 20px; background: #fff; color: #000; border: 2px solid #eee; border-radius: 4px; cursor: pointer; font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 13px; transition: all 0.2s;">NEXT</button>
                   </div>
-                  <div id="browser-loader" style="text-align:center; padding:40px; display:none; color: #888;">
-                     Searching Modrinth...
+                  <div id="browser-loader" style="text-align:center; padding:40px; display:none;">
+                            <div class="spinner"></div> Searching Modrinth...
+                        </div>
+                        
+                        <div class="load-more-container" style="display:flex; justify-content:center; padding: 40px;">
+                            <button id="btn-load-more" class="cta-btn" style="display:none; padding: 15px 30px; font-size:12px;">LOAD MORE</button>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- New Instance Modal -->
-    <div id="new-instance-modal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 7000; justify-content: center; align-items: center;">
-        <div class="modal-box" style="background: #111; padding: 30px; border-radius: 12px; width: 400px; border: 1px solid #333; color: white;">
-            <div class="modal-header" style="display:flex; justify-content:space-between; margin-bottom: 20px;">
-                <h2 style="margin:0; font-size: 20px; font-family: 'Space Grotesk', sans-serif;">Nouvelle Instance</h2>
-                <button id="close-modal-btn" style="background:none; border:none; color:white; font-size:24px; cursor:pointer;">&times;</button>
-            </div>
+            </section>
             
-            <div class="input-container">
-                <div class="input-group" style="margin-bottom: 20px;">
-                    <label style="font-size:12px; font-weight:700; display:block; margin-bottom:5px; color:#aaa; font-family: 'Outfit', sans-serif;">NOM</label>
-                    <input type="text" id="inst-name" placeholder="Mon Modpack" style="width:100%; padding: 12px; background: #222; border: 1px solid #444; color: white; border-radius: 6px; font-family: 'Outfit', sans-serif;">
+                                                            <!-- FRIENDS TAB -->
+                        <!-- FRIENDS TAB -->
+            <section id="friends-tab" class="tab-section scroll-section" style="height: 100%; display: flex; flex-direction: column;">
+                <div class="content-header" style="margin-bottom: 5px; display: flex; justify-content: space-between; align-items: flex-end;">
+                    <div>
+                        <h2>SOCIAL HUB</h2>
+                        <p style="color:#666; margin-top:5px; font-weight:500;">Connect, play, and share .hexa modpacks instantly.</p>
+                    </div>
                 </div>
+
+                <div class="soc-wrapper">
+                    <!-- Sidebar -->
+                    <div class="soc-sidebar">
+                        <div class="soc-search-area" style="display:flex; flex-direction:column; gap:5px;">
+                            <input type="text" class="soc-search" placeholder="Search friends...">
+                            <div style="display:flex; gap:5px;">
+                                <input type="text" id="add-friend-input" class="soc-search" placeholder="Friend Username" style="flex:1;">
+                                <button id="add-friend-btn" style="background:#555; color:white; border:none; border-radius:8px; padding:0 12px; cursor:pointer;">Add</button>
+                            </div>
+                        </div>
+                        <div class="soc-roster"></div>
+                      </div>
+                      <div class="soc-main">
+                        <div class="soc-header">
+                            <div class="soc-header-left">
+                                <img id="soc-header-pic" src="" class="soc-header-avatar" style="display:none; image-rendering:pixelated;" loading="lazy" onerror="this.src='https://minotar.net/helm/Steve/64';">
+                                <div>
+                                    <div id="soc-header-name" style="font-weight: 800; font-size: 16px; color: var(--text-color);">Sélectionnez un ami</div>
+                                    <div id="soc-header-status" style="font-size: 12px; color: #2ecc71; margin-top: 2px;"></div>
+                                </div>
+                            </div>
+                            <div class="soc-header-right">
+                                
+                                <button class="soc-action-btn" style="padding: 8px 10px;"><i class="fas fa-ellipsis-v"></i></button>
+                            </div>
+                        </div>
+                        
+                        <div class="soc-messages" id="soc-msg-list"></div>
+                        <div class="soc-input-area">
+                            <div class="soc-input-box">
+                                <button class="soc-btn-icon" id="btn-soc-plus" onclick="toggleAttachPopup()"><i class="fas fa-plus-circle"></i></button>
+                                
+                                <!-- Attachment Popup -->
+                                <div id="chat-attach-popup" style="display:none; position:absolute; bottom:60px; left:20px; width:300px; max-height:400px; background:var(--bg-color); border:1px solid var(--border-color); border-radius:8px; display:flex; flex-direction:column; box-shadow:0 10px 30px rgba(0,0,0,0.2); z-index:1000; overflow:hidden;">
+                                    <!-- HEADERS/NAV -->
+                                    <div style="padding:10px; border-bottom:1px solid var(--border-color); background:var(--secondary-bg); display:flex; justify-content:space-between; align-items:center;">
+                                        <h4 id="attach-title" style="margin:0; font-size:12px; text-transform:uppercase; color:#888;">ATTACHMENT</h4>
+                                        <button onclick="toggleAttachPopup(false)" style="border:none; background:transparent; font-weight:bold; cursor:pointer;">&times;</button>
+                                    </div>
+
+                                    <!-- VIEW: MENU -->
+                                    <div id="attach-menu-view" style="padding:10px; display:flex; flex-direction:column; gap:5px;">
+                                        <button class="attach-btn" onclick="showAttachModpacks()"><i class="fas fa-box" style="margin-right:10px;"></i> Share Modpack</button>
+                                        <button class="attach-btn" onclick="showAttachScreenshots()"><i class="fas fa-image" style="margin-right:10px;"></i> Share Screenshot</button>
+                                    </div>
+
+                                    <!-- VIEW: LIST -->
+                                    <div id="attach-list-view" style="display:none; flex:1; overflow-y:auto; padding:10px; background:#f5f5f5;">
+                                        <div id="attach-list-content" style="display:flex; flex-direction:column; gap:5px;"></div>
+                                        <div id="attach-list-loader" style="display:none; text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i></div>
+                                    </div>
+                                    
+                                    <!-- FOOTER -->
+                                    <div id="attach-footer" style="padding:10px; border-top:1px solid var(--border-color); display:none; background:var(--bg-color);">
+                                        <button onclick="resetAttachView()" style="width:100%; border:1px solid var(--border-color); background:var(--card-bg); padding:8px; border-radius:4px; cursor:pointer; font-size:12px;">Back to Menu</button>
+                                    </div>
+                                </div>
+
+                                <style>
+                                    .attach-btn {
+                                        background: var(--bg-color); border: 1px solid var(--border-color); padding: 12px;
+                                        text-align: left; border-radius: 6px; cursor: pointer; transition: 0.2s;
+                                        font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 600;
+                                        display: flex; align-items: center;
+                                    }
+                                    .attach-btn:hover { background: var(--secondary-bg); border-color: var(--border-color); }
+                                    .attach-item {
+                                        background: var(--card-bg); padding: 10px; border-radius: 4px; border: 1px solid var(--border-color);
+                                        cursor: pointer; display: flex; align-items: center; gap: 10px;
+                                    }
+                                    .attach-item:hover { border-color: var(--text-color); }
+                                    .attach-thumb {
+                                        width: 100%; height: 80px; object-fit: cover; border-radius: 4px; cursor: pointer;
+                                        border: 2px solid transparent;
+                                    }
+                                    .attach-thumb:hover { border-color: var(--text-color); }
+                                </style>
+
+                                <input type="text" class="soc-input" id="soc-input-text" placeholder="Écrivez un message..." onkeydown="if(event.key === 'Enter') sendChatMessage()">
+                                <div class="soc-input-actions">
+                                    <button class="soc-btn-icon" onclick="sendChatMessage()" title="Envoyer"><i class="fas fa-paper-plane"></i></button>
+                                    <div style="position:relative; display:inline-block;">
+                                        <!-- ID emoji-picker with class emoji-picker-win (CSS handles scroll/colors) -->
+                                        <div id="emoji-picker" class="emoji-picker-win">
+                                            <!-- People -->
+                                            <div onclick="insertEmoji('😀')" class="emoji-item">😀</div>
+                                            <div onclick="insertEmoji('😃')" class="emoji-item">😃</div>
+                                            <div onclick="insertEmoji('😄')" class="emoji-item">😄</div>
+                                            <div onclick="insertEmoji('😁')" class="emoji-item">😁</div>
+                                            <div onclick="insertEmoji('😆')" class="emoji-item">😆</div>
+                                            <div onclick="insertEmoji('😅')" class="emoji-item">😅</div>
+                                            <div onclick="insertEmoji('😂')" class="emoji-item">😂</div>
+                                            <div onclick="insertEmoji('🤣')" class="emoji-item">🤣</div>
+                                            <div onclick="insertEmoji('😊')" class="emoji-item">😊</div>
+                                            <div onclick="insertEmoji('😇')" class="emoji-item">😇</div>
+                                            <div onclick="insertEmoji('🙂')" class="emoji-item">🙂</div>
+                                            <div onclick="insertEmoji('🙃')" class="emoji-item">🙃</div>
+                                            <div onclick="insertEmoji('😉')" class="emoji-item">😉</div>
+                                            <div onclick="insertEmoji('😌')" class="emoji-item">😌</div>
+                                            <div onclick="insertEmoji('😍')" class="emoji-item">😍</div>
+                                            <div onclick="insertEmoji('🥰')" class="emoji-item">🥰</div>
+                                            <div onclick="insertEmoji('😘')" class="emoji-item">😘</div>
+                                            <div onclick="insertEmoji('😗')" class="emoji-item">😗</div>
+                                            <div onclick="insertEmoji('😙')" class="emoji-item">😙</div>
+                                            <div onclick="insertEmoji('😚')" class="emoji-item">😚</div>
+                                            <div onclick="insertEmoji('😋')" class="emoji-item">😋</div>
+                                            <div onclick="insertEmoji('😛')" class="emoji-item">😛</div>
+                                            <div onclick="insertEmoji('😜')" class="emoji-item">😜</div>
+                                            <div onclick="insertEmoji('🤪')" class="emoji-item">🤪</div>
+                                            <div onclick="insertEmoji('😝')" class="emoji-item">😝</div>
+                                            <div onclick="insertEmoji('🤑')" class="emoji-item">🤑</div>
+                                            <div onclick="insertEmoji('🤗')" class="emoji-item">🤗</div>
+                                            <div onclick="insertEmoji('🤭')" class="emoji-item">🤭</div>
+                                            <div onclick="insertEmoji('🤫')" class="emoji-item">🤫</div>
+                                            <div onclick="insertEmoji('🤔')" class="emoji-item">🤔</div>
+                                            <div onclick="insertEmoji('🤐')" class="emoji-item">🤐</div>
+                                            <div onclick="insertEmoji('🤨')" class="emoji-item">🤨</div>
+                                            <div onclick="insertEmoji('😐')" class="emoji-item">😐</div>
+                                            <div onclick="insertEmoji('😑')" class="emoji-item">😑</div>
+                                            <div onclick="insertEmoji('😶')" class="emoji-item">😶</div>
+                                            <div onclick="insertEmoji('😏')" class="emoji-item">😏</div>
+                                            <div onclick="insertEmoji('😒')" class="emoji-item">😒</div>
+                                            <div onclick="insertEmoji('🙄')" class="emoji-item">🙄</div>
+                                            <div onclick="insertEmoji('😬')" class="emoji-item">😬</div>
+                                            <div onclick="insertEmoji('🤥')" class="emoji-item">🤥</div>
+                                            <div onclick="insertEmoji('😌')" class="emoji-item">😌</div>
+                                            <div onclick="insertEmoji('😔')" class="emoji-item">😔</div>
+                                            <div onclick="insertEmoji('😪')" class="emoji-item">😪</div>
+                                            <div onclick="insertEmoji('🤤')" class="emoji-item">🤤</div>
+                                            <div onclick="insertEmoji('😴')" class="emoji-item">😴</div>
+                                            <div onclick="insertEmoji('😷')" class="emoji-item">😷</div>
+                                            <div onclick="insertEmoji('🤒')" class="emoji-item">🤒</div>
+                                            <div onclick="insertEmoji('🤕')" class="emoji-item">🤕</div>
+                                            <div onclick="insertEmoji('🤢')" class="emoji-item">🤢</div>
+                                            <div onclick="insertEmoji('🤮')" class="emoji-item">🤮</div>
+                                            <!-- Hands -->
+                                            <div onclick="insertEmoji('👋')" class="emoji-item">👋</div>
+                                            <div onclick="insertEmoji('🤚')" class="emoji-item">🤚</div>
+                                            <div onclick="insertEmoji('🖐')" class="emoji-item">🖐</div>
+                                            <div onclick="insertEmoji('✋')" class="emoji-item">✋</div>
+                                            <div onclick="insertEmoji('🖖')" class="emoji-item">🖖</div>
+                                            <div onclick="insertEmoji('👌')" class="emoji-item">👌</div>
+                                            <div onclick="insertEmoji('🤏')" class="emoji-item">🤏</div>
+                                            <div onclick="insertEmoji('✌️')" class="emoji-item">✌️</div>
+                                            <div onclick="insertEmoji('🤞')" class="emoji-item">🤞</div>
+                                            <div onclick="insertEmoji('🤟')" class="emoji-item">🤟</div>
+                                            <div onclick="insertEmoji('🤘')" class="emoji-item">🤘</div>
+                                            <div onclick="insertEmoji('🤙')" class="emoji-item">🤙</div>
+                                            <div onclick="insertEmoji('👈')" class="emoji-item">👈</div>
+                                            <div onclick="insertEmoji('👉')" class="emoji-item">👉</div>
+                                            <div onclick="insertEmoji('👆')" class="emoji-item">👆</div>
+                                            <div onclick="insertEmoji('🖕')" class="emoji-item">🖕</div>
+                                            <div onclick="insertEmoji('👇')" class="emoji-item">👇</div>
+                                            <div onclick="insertEmoji('☝️')" class="emoji-item">☝️</div>
+                                            <div onclick="insertEmoji('👍')" class="emoji-item">👍</div>
+                                            <div onclick="insertEmoji('👎')" class="emoji-item">👎</div>
+                                            <div onclick="insertEmoji('✊')" class="emoji-item">✊</div>
+                                            <div onclick="insertEmoji('👊')" class="emoji-item">👊</div>
+                                            <div onclick="insertEmoji('🤛')" class="emoji-item">🤛</div>
+                                            <div onclick="insertEmoji('🤜')" class="emoji-item">🤜</div>
+                                            <div onclick="insertEmoji('👏')" class="emoji-item">👏</div>
+                                            <div onclick="insertEmoji('🙌')" class="emoji-item">🙌</div>
+                                            <div onclick="insertEmoji('👐')" class="emoji-item">👐</div>
+                                            <div onclick="insertEmoji('🤲')" class="emoji-item">🤲</div>
+                                            <div onclick="insertEmoji('🤝')" class="emoji-item">🤝</div>
+                                            <div onclick="insertEmoji('🙏')" class="emoji-item">🙏</div>
+                                            <!-- Objects/Symbols -->
+                                            <div onclick="insertEmoji('❤️')" class="emoji-item">❤️</div>
+                                            <div onclick="insertEmoji('🧡')" class="emoji-item">🧡</div>
+                                            <div onclick="insertEmoji('💛')" class="emoji-item">💛</div>
+                                            <div onclick="insertEmoji('💚')" class="emoji-item">💚</div>
+                                            <div onclick="insertEmoji('💙')" class="emoji-item">💙</div>
+                                            <div onclick="insertEmoji('💜')" class="emoji-item">💜</div>
+                                            <div onclick="insertEmoji('🖤')" class="emoji-item">🖤</div>
+                                            <div onclick="insertEmoji('💔')" class="emoji-item">💔</div>
+                                            <div onclick="insertEmoji('🔥')" class="emoji-item">🔥</div>
+                                            <div onclick="insertEmoji('✨')" class="emoji-item">✨</div>
+                                            <div onclick="insertEmoji('⭐')" class="emoji-item">⭐</div>
+                                            <div onclick="insertEmoji('🌟')" class="emoji-item">🌟</div>
+                                            <div onclick="insertEmoji('💫')" class="emoji-item">💫</div>
+                                            <div onclick="insertEmoji('💥')" class="emoji-item">💥</div>
+                                            <div onclick="insertEmoji('💢')" class="emoji-item">💢</div>
+                                            <div onclick="insertEmoji('💦')" class="emoji-item">💦</div>
+                                            <div onclick="insertEmoji('💨')" class="emoji-item">💨</div>
+                                            <div onclick="insertEmoji('💣')" class="emoji-item">💣</div>
+                                            <div onclick="insertEmoji('💬')" class="emoji-item">💬</div>
+                                            <div onclick="insertEmoji('👁️')" class="emoji-item">👁️</div>
+                                            <div onclick="insertEmoji('☠️')" class="emoji-item">☠️</div>
+                                            <div onclick="insertEmoji('💀')" class="emoji-item">💀</div>
+                                            <div onclick="insertEmoji('👻')" class="emoji-item">👻</div>
+                                            <div onclick="insertEmoji('👽')" class="emoji-item">👽</div>
+                                            <div onclick="insertEmoji('🤖')" class="emoji-item">🤖</div>
+                                        </div>
+                                        <button class="soc-btn-icon" onclick="const el=document.getElementById('emoji-picker'); if(el.style.display==='grid'){el.style.display='none'}else{el.style.display='grid'}"><i class="fas fa-smile"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+    let currentFriendId = null;
+    let _msgPollInterval = null;
+
+    // Helper to prevent bubble
+    function prev_def(e) {
+        if(e) { e.preventDefault(); e.stopPropagation(); }
+    }
+
+    // Emoji Helper
+    window.insertEmoji = function(char) {
+        const inp = document.getElementById('soc-input-text');
+        inp.value += char;
+        inp.focus();
+        document.getElementById('emoji-picker').style.display = 'none';
+    };
+
+    // Close picker outside
+    document.addEventListener('click', function(e) {
+        const picker = document.getElementById('emoji-picker');
+        if (picker && picker.style.display !== 'none') {
+             // Check if click is inside picker or the toggle button
+             if (!picker.contains(e.target) && !e.target.closest('.soc-btn-icon')) {
+                  picker.style.display = 'none';
+             }
+        }
+    });
+
+    // Helper: Build Message HTML
+    // Enhanced Emoji Parsing (Discord style)
+    function parseEmojis(text) {
+        const map = {
+            ':)': '😊', ':-)': '😊',
+            ':D': '😃', ':-D': '😃',
+            '<3': '❤️',
+            ';)': '😉', ';-)': '😉',
+            ':P': '😛', ':-P': '😛',
+            ':o': '😮', ':-o': '😮',
+            ':(': '😢', ':-(': '😢',
+            ':thumbsup:': '👍',
+            ':joy:': '😂',
+            ':cry:': '😭',
+            ':fire:': '🔥'
+        };
+        let out = text;
+        for (let k in map) {
+            out = out.split(k).join(map[k]); 
+        }
+        return out;
+    }
+
+    // MODPACK SHARE PARSER
+    function parseModpackShare(text) {
+         if(!text.startsWith('[MODPACK SHARE]')) return null;
+         try {
+             const json = text.replace('[MODPACK SHARE] ', '');
+             return JSON.parse(json);
+         } catch(e) { return null; }
+    }
+
+    const _DEFAULT_API = "http://91.197.6.177:24607";
+
+    function buildMessageHTML(m, friendAvatar, friendName, myAvatar, myName) {
+        // Safe access to API for constructing fallback URLs if needed
+        const api = (window.API_BASE_URL) ? window.API_BASE_URL : _DEFAULT_API;
+        
+        // Correct logic: If sender is NOT friend, it is Me.
+        const isMe = (String(m.sender_id) != String(currentFriendId)); 
+        
+        let avatarUrl = isMe ? myAvatar : friendAvatar;
+        // Fix myAvatar if it relies on broken/undefined variables
+        if(isMe && (!myAvatar || myAvatar.includes('undefined'))) {
+             if(currentUser && currentUser.username) {
+                 avatarUrl = `${api}/storage/skins/${currentUser.username}.png`;
+             } else {
+                 avatarUrl = "assets/logo.png";
+             }
+        }
+        
+        const name   = isMe ? myName : friendName;
+        
+        // Smart Date Formatting
+        let dateStr = "Just now";
+        if (m.created_at) {
+             try { 
+                 // Handle MySQL format "YYYY-MM-DD HH:MM:SS" if needed
+                 let dStr = m.created_at; 
+                 if(typeof dStr === 'string' && dStr.includes(' ') && !dStr.includes('T')) {
+                     dStr = dStr.replace(' ', 'T'); // "2023-10-10 10:10:10" -> "2023-10-10T10:10:10"
+                 }
+                 const d = new Date(dStr);
+                 if (!isNaN(d.getTime())) {
+                     const today = new Date();
+                     const isToday = (d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear());
+                     const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                     dateStr = isToday ? `Today at ${timeStr}` : d.toLocaleDateString() + ' ' + timeStr;
+                 }
+             } catch(e) {}
+        }
+
+        // MODPACK SHARE HANDLING
+        const shareData = parseModpackShare(m.message);
+        let contentHtml = '';
+        
+        if (shareData) {
+            const logo = shareData.icon || 'assets/logo.png';
+            contentHtml = `
+                <div class="modpack-share-card" onclick="LibraryManager.importShare('${btoa(JSON.stringify(shareData))}')">
+                    <img src="${logo}" onerror="this.src='assets/logo.png'">
+                    <div class="info">
+                        <div class="title">${shareData.name}</div>
+                        <div class="meta">${shareData.version} • ${shareData.loader}</div>
+                        <div class="cta"><i class="fas fa-download"></i> Click to Import</div>
+                    </div>
+                </div>
+            `;
+        } else {
+             const text = parseEmojis(m.message);
+             contentHtml = `<div class="msg-text" id="msg-text-${m.id}">${text}</div>`;
+        }
+
+        // Actions (Only valid for me)
+        let actions = '';
+        if (isMe) {
+            actions = `
+                <div class="msg-actions">
+                    <button class="msg-action-btn" title="Add Reaction">😊</button>
+                    <button class="msg-action-btn" title="Edit" onclick="startEditMessage(${m.id})"><i class="fas fa-pencil-alt"></i></button>
+                    <button class="msg-action-btn" title="Pin"><i class="fas fa-thumbtack"></i></button>
+                    <button class="msg-action-btn danger" title="Delete" onclick="deleteMessage(${m.id})"><i class="fas fa-trash"></i></button>
+                </div>
+            `;
+        } else {
+             actions = `
+                <div class="msg-actions">
+                    <button class="msg-action-btn" title="Add Reaction">😊</button>
+                    <button class="msg-action-btn" title="Reply"><i class="fas fa-reply"></i></button>
+                    <button class="msg-action-btn" title="Pin"><i class="fas fa-thumbtack"></i></button>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="msg-row" id="msg-${m.id}">
+                <div class="msg-avatar">
+                   <div class="msg-avatar-img" style="background-image: url('${avatarUrl}');"></div>
+                </div>
+                <div class="msg-content">
+                    <div class="msg-header">
+                        <span class="msg-author" style="color:${isMe?'#fff':'#fff'};">${name}</span>
+                        <span class="msg-date">${dateStr}</span>
+                    </div>
+                    ${contentHtml}
+                    ${actions}
+                </div>
+            </div>
+        `;
+    }
+
+    async function fetchChatLoop(friendId, friendName, friendAvatar) {
+        if (!window.electron || !window.electron.getMessages) return;
+        if (currentFriendId !== friendId) return; 
+        
+        const myName = (currentUser && currentUser.username) ? currentUser.username : 'Me';
+        // Fallback or API URL
+        const myAvatar = (currentUser && currentUser.username) 
+            ? API_BASE_URL + "/storage/skins/" + currentUser.username + ".png"
+            : "assets/logo.png"; // Fallback
+
+        try {
+            const res = await window.electron.getMessages(friendId);
+            if (res && res.success) {
+                const msgList = document.getElementById('soc-msg-list');
+                const isScrolledToBottom = (msgList.scrollHeight - msgList.scrollTop <= msgList.clientHeight + 50);
+
+                // Smart Diff-like update
+                const existing = Array.from(msgList.querySelectorAll('.msg-row')).map(el => parseInt(el.id.replace('msg-', '')));
+                const newIds = res.messages.map(m => m.id);
                 
-                <div class="input-group" style="margin-bottom: 20px;">
-                    <label style="font-size:12px; font-weight:700; display:block; margin-bottom:5px; color:#aaa; font-family: 'Outfit', sans-serif;">VERSION</label>
-                    <select id="inst-version" style="width:100%; padding: 12px; background: #222; border: 1px solid #444; color: white; border-radius: 6px; font-family: 'Outfit', sans-serif;">
-                        <option value="">Chargement...</option>
-                    </select>
+                if (msgList.innerHTML.includes('Chargement...') || msgList.innerHTML.includes('Aucun message')) {
+                    if (res.messages.length > 0) msgList.innerHTML = '';
+                }
+                
+                if (res.messages.length === 0 && msgList.childElementCount === 0) {
+                     msgList.innerHTML = '<div style="padding:40px; text-align:center; color:#ddd; display:flex; flex-direction:column; align-items:center; gap:10px;"><i class="fas fa-comments" style="font-size:32px; color:#eee;"></i><div>No messages yet.<br>Start the conversation!</div></div>';
+                     return;
+                }
+
+                let hasNew = false;
+                
+                // Process Messages
+                res.messages.forEach(m => {
+                    if (!existing.includes(m.id)) {
+                        const html = buildMessageHTML(m, friendAvatar, friendName, myAvatar, myName);
+                        const temp = document.createElement('div');
+                        temp.innerHTML = html.trim();
+                        msgList.appendChild(temp.firstChild);
+                        hasNew = true;
+                    } else {
+                        // Update content if edited
+                        const textEl = document.getElementById(`msg-text-${m.id}`);
+                        // Avoid overwriting if currently editing
+                        if (textEl && !textEl.querySelector('input') && textEl.innerText !== m.message) {
+                             textEl.innerText = m.message;
+                        }
+                    }
+                });
+                
+                // Remove Deleted
+                existing.forEach(oldId => {
+                    if (!newIds.includes(oldId)) {
+                        const el = document.getElementById(`msg-${oldId}`);
+                        if (el) el.remove();
+                    }
+                });
+
+                // Auto Scroll if was at bottom or new msgs
+                if (hasNew && isScrolledToBottom) {
+                    msgList.scrollTop = msgList.scrollHeight;
+                }
+            }
+        } catch(e) { console.error("Poll Error", e); }
+    }
+
+    window.setSocial = function(name, status, avatar, type, el, id) {
+        // UI Active State
+        document.querySelectorAll('.soc-user').forEach(e => e.classList.remove('active'));
+        if (el) el.classList.add('active');
+        
+        // Stop previous poll
+        if (_msgPollInterval) clearInterval(_msgPollInterval);
+        currentFriendId = id;
+
+        // Header
+        const pic = document.getElementById('soc-header-pic');
+        pic.src = avatar;
+        pic.style.display = 'block';
+        document.getElementById('soc-header-name').innerText = name;
+        const sEl = document.getElementById('soc-header-status');
+        sEl.innerText = status;
+        sEl.style.color = (type === 'online') ? '#2ecc71' : '#ccc';
+
+        // Reset List
+        const msgList = document.getElementById('soc-msg-list');
+        msgList.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">Chargement...</div>';
+        
+        // Start Loop
+        fetchChatLoop(id, name, avatar);
+        _msgPollInterval = setInterval(() => fetchChatLoop(id, name, avatar), 3000); // 3s poll
+        
+        const inp = document.getElementById('soc-input-text');
+        inp.placeholder = "Message @" + name + "...";
+        inp.focus();
+    };
+
+    window.sendChatMessage = async function() {
+        const input = document.getElementById('soc-input-text');
+        const text = input.value.trim();
+        if(!text || !currentFriendId) return;
+        
+        input.value = '';
+        
+        // Optimistic Append (Discord style)
+        // We guess the ID (temp) or just wait for poll? 
+        // Better to wait for poll to avoid duplicate flickering, 
+        // OR append with a specific 'sending' class.
+        // Let's just wait for poll since it's fast (3s) or trigger poll immediately after send.
+
+        if (window.electron && window.electron.sendMessage) {
+            try {
+                await window.electron.sendMessage(currentFriendId, text);
+                // Trigger immediate refresh
+                const name = document.getElementById('soc-header-name').innerText;
+                const avatar = document.getElementById('soc-header-pic').src;
+                fetchChatLoop(currentFriendId, name, avatar);
+            } catch(e) {
+                console.error("Send failed", e);
+                alert("Erreur d'envoi");
+            }
+        }
+    };
+    
+    // Actions
+    window.deleteMessage = async (id) => {
+        if (!confirm("Are you sure you want to delete this message?")) return;
+        if (window.electron && window.electron.deleteMessage) {
+            await window.electron.deleteMessage(id);
+            // Refresh
+            const name = document.getElementById('soc-header-name').innerText;
+            const avatar = document.getElementById('soc-header-pic').src;
+            fetchChatLoop(currentFriendId, name, avatar);
+        }
+    };
+    
+    window.startEditMessage = (id) => {
+        const textEl = document.getElementById(`msg-text-${id}`);
+        const currentText = textEl.innerText;
+        textEl.innerHTML = `<div class="msg-edit-area">
+            <input class="msg-edit-input" id="edit-inp-${id}" value="${currentText.replace(/"/g, '&quot;')}">
+            <div class="msg-edit-info">Unsaved changes. Escape to cancel, Enter to save.</div>
+        </div>`;
+        const inp = document.getElementById(`edit-inp-${id}`);
+        inp.focus();
+        // Move cursor to end
+        inp.setSelectionRange(inp.value.length, inp.value.length);
+        
+        inp.onkeydown = async (e) => {
+             if (e.key === 'Enter') {
+                 const val = inp.value.trim();
+                 if (val && window.electron && window.electron.editMessage) {
+                      await window.electron.editMessage(id, val);
+                      textEl.innerText = val; // Optimistic
+                 }
+             } else if (e.key === 'Escape') {
+                 textEl.innerText = currentText;
+             }
+        };
+    };
+</script>
+            </section>
+
+            <!-- WARDROBE TAB -->
+             <section id="wardrobe-tab" class="tab-section scroll-section">
+                <div class="content-header" style="margin-bottom: 30px;">
+                    <h2>OPERATOR WARDROBE</h2>
+                    <p style="color:#666; margin-top:5px; font-weight:500;">Customize your appearance on the database.</p>
                 </div>
 
-                <div class="input-group">
-                    <label style="font-size:12px; font-weight:700; display:block; margin-bottom:5px; color:#aaa; font-family: 'Outfit', sans-serif;">LOADER</label>
-                    <select id="inst-loader" style="width:100%; padding: 12px; background: #222; border: 1px solid #444; color: white; border-radius: 6px; font-family: 'Outfit', sans-serif;">
-                        <option value="vanilla">Vanilla</option>
-                        <option value="fabric">Fabric</option>
-                        <option value="quilt">Quilt</option>
-                        <option value="forge">Forge</option>
-                        <option value="neoforge">NeoForge</option>
-                    </select>
-                </div>
-            </div>
+                <div class="wardrobe-carousel-wrapper" style="position: relative; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px 0;">
 
-            <div class="modal-actions" style="margin-top: 30px; display:flex; justify-content:flex-end; gap:10px;">
-                <button id="cancel-create-btn" style="padding: 10px 20px; background: transparent; color: #aaa; border: 1px solid #444; border-radius: 6px; cursor:pointer; font-family: 'Outfit', sans-serif;">Annuler</button>
-                <button id="confirm-create-btn" style="padding: 10px 20px; background: var(--primary-pink); color: white; border: none; border-radius: 6px; font-weight:bold; cursor:pointer; font-family: 'Outfit', sans-serif;">HACK IN</button>
-            </div>
+                    <div class="carousel-container" style="display: flex; align-items: center; justify-content: center; width: 100%; max-width: 800px; overflow: hidden; position: relative; margin: 0 auto; height: 350px;">
+                        
+                        <!-- Left Btn -->
+                        <button id="wardrobe-prev" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.05); border: none; font-size: 30px; color: #111; cursor: pointer; z-index: 20; padding: 20px; border-radius: 8px; transition: all 0.2s;"><i class="fas fa-chevron-left"></i></button>
+
+                        <!-- Track -->
+                        <div id="wardrobe-track" style="display: flex; gap: 40px; transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1); align-items: center; justify-content: center; width: max-content;">
+                            <!-- Active Skin dynamically injected by JS -->
+                        </div>
+
+                        <!-- Right Btn -->
+                        <button id="wardrobe-next" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.05); border: none; font-size: 30px; color: #111; cursor: pointer; z-index: 20; padding: 20px; border-radius: 8px; transition: all 0.2s;"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+
+                    <!-- Action -->
+                    <div style="margin-top: 40px; display: flex; flex-direction: row; gap: 20px; align-items: center;">
+                        <button id="upload-skin-btn" class="cta-btn" style="padding: 15px 40px; font-size: 14px;"><i class="fas fa-upload" style="margin-right: 10px;"></i> UPLOAD NEW SKIN</button>
+                        <button id="apply-skin-btn" class="cta-btn" style="padding: 15px 40px; font-size: 14px; background: #222; color: #fff;"><i class="fas fa-check" style="margin-right: 10px;"></i> APPLY SKIN</button>
+                    </div>
+                    <p style="color:#999; margin-top: 15px; font-size: 12px; font-weight: 600;">Supports 64x64 PNG files.</p>
+                </div>
+
+
+            <!-- SETTINGS TAB -->
+            <section id="settings-tab" class="tab-section scroll-section">
+                <div class="content-header" style="margin-bottom: 20px;">
+                    <h2>GLOBAL SETTINGS</h2>
+                    <p style="color:#666; margin-top:5px; font-weight:500;">Configure default options for Hexa Launcher</p>
+                </div>
+
+                <div class="settings-accordion">
+                    <!-- Resource Management -->
+                    <div class="acc-item active" onclick="toggleAccordion(this)">
+                        <div class="acc-header">
+                            <i class="fas fa-microchip"></i>
+                            <span style="flex:1;">Resource Management</span>
+                            <i class="fas fa-chevron-down acc-arrow"></i>
+                        </div>
+                        <div class="acc-content" onclick="event.stopPropagation()">
+                            <div class="setting-group" style="padding-bottom: 15px;">
+                                <label style="display:block; margin-bottom: 15px; color:#555; font-size:12px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase;">Memory Allocation (RAM)</label>
+                                <div class="ram-control" style="display:flex; align-items:center; gap:20px;">
+                                    <input type="range" id="ram-slider" min="1024" max="16384" step="512" value="4096" class="hex-slider" style="flex:1;">
+                                    <span id="ram-display" style="min-width:80px; font-weight:800; font-size:16px; color:#111; text-align:right;">4096 MB</span>
+                                </div>
+                            </div>
+                            <div class="setting-group">
+                                <label style="display:block; margin-bottom: 10px; color:#555; font-size:12px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase;">Graphics Processor (GPU)</label>
+                                <select class="hex-input" id="gpu-selector" style="width: 100%;  padding: 12px; background: #fdfdfd; color: #111; border: 1px solid #ddd; outline: none; font-family: 'Montserrat', sans-serif;">
+                                    <option value="auto">Auto-Select High Performance GPU</option>
+                                    <option value="gpu0">NVIDIA GeForce RTX</option>
+                                    <option value="gpu1">Integrated Graphics</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Java Installations -->
+                    <div class="acc-item" onclick="toggleAccordion(this)">
+                        <div class="acc-header">
+                            <i class="fas fa-coffee"></i>
+                            <span style="flex:1;">Java Installations</span>
+                            <i class="fas fa-chevron-down acc-arrow"></i>
+                        </div>
+                        <div class="acc-content" onclick="event.stopPropagation()">
+                            <style>
+                                .java-input-row { display:flex; gap:10px; margin-bottom: 15px; }
+                                .java-input-row .hex-input { flex:1; background: #fdfdfd; border: 1px solid #ddd; color: #111; padding: 12px;  font-family: 'Montserrat', sans-serif; }
+                                .java-input-row .browse-btn { background: #eee; border: 1px solid #ccc; color: #111; padding: 0 25px;  font-weight: 800; cursor: pointer; transition: all 0.2s; text-transform: uppercase; font-size: 13px; }
+                                .java-input-row .browse-btn:hover { background: #333; border-color: #666; }
+                                .java-label { display:block; margin-bottom: 8px; color:#555; font-size:12px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase; }
+                            </style>
+                            
+                            <!-- JAVA 8 -->
+                            <div class="setting-group">
+                                <label class="java-label">Global Java 8 Executable Path</label>
+                                <div class="java-input-row">
+                                    <input type="text" id="java-path-8" placeholder="Auto-Detect (Recommended) - Managed by Hexa" class="hex-input">
+                                    <button class="browse-btn" onclick="document.getElementById('java-path-8').value='C:/Program Files/Java/jre1.8.0/bin/java.exe'">Browse</button>
+                                </div>
+                            </div>
+                            <!-- JAVA 17 -->
+                            <div class="setting-group">
+                                <label class="java-label">Global Java 17 Executable Path</label>
+                                <div class="java-input-row">
+                                    <input type="text" id="java-path-17" placeholder="Auto-Detect (Recommended) - Managed by Hexa" class="hex-input">
+                                    <button class="browse-btn" onclick="document.getElementById('java-path-17').value='C:/Program Files/Java/jdk-17/bin/java.exe'">Browse</button>
+                                </div>
+                            </div>
+                            <!-- JAVA 21 -->
+                            <div class="setting-group">
+                                <label class="java-label">Global Java 21 Executable Path</label>
+                                <div class="java-input-row">
+                                    <input type="text" id="java-path-21" placeholder="Auto-Detect (Recommended) - Managed by Hexa" class="hex-input">
+                                    <button class="browse-btn" onclick="document.getElementById('java-path-21').value='C:/Program Files/Java/jdk-21/bin/java.exe'">Browse</button>
+                                </div>
+                            </div>
+                            <!-- JAVA 25 -->
+                            <div class="setting-group">
+                                <label class="java-label">Global Java 25 Executable Path</label>
+                                <div class="java-input-row">
+                                    <input type="text" id="java-path-25" placeholder="Auto-Detect (Recommended) - Managed by Hexa" class="hex-input">
+                                    <button class="browse-btn" onclick="document.getElementById('java-path-25').value='C:/Program Files/Java/jdk-25/bin/java.exe'">Browse</button>
+                                </div>
+                            </div>
+                            <p style="color:#777; font-size:12px; margin-top:5px; font-weight: 500;">Hexa automatically downloads necessary Java versions (8/17/21/25). Use this to override.</p>
+                        </div>
+                    </div>
+
+                    <!-- Default Instance Options -->
+                    <div class="acc-item" onclick="toggleAccordion(this)">
+                        <div class="acc-header">
+                            <i class="fas fa-gamepad"></i>
+                            <span style="flex:1;">Default Instance Options</span>
+                            <i class="fas fa-chevron-down acc-arrow"></i>
+                        </div>
+                        <div class="acc-content" onclick="event.stopPropagation()">
+                            <div style="display:flex; gap:20px; padding-bottom:20px;">
+                                <div class="setting-group" style="flex:1;">
+                                    <label style="display:block; margin-bottom: 10px; color:#555; font-size:12px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase;">Window Width</label>
+                                    <input type="number" id="default-width" value="855" class="hex-input" style="width: 100%;  padding: 12px; background: #fdfdfd; color: #111; border: 1px solid #ddd; outline: none; font-family: 'Montserrat', sans-serif;">
+                                </div>
+                                <div class="setting-group" style="flex:1;">
+                                    <label style="display:block; margin-bottom: 10px; color:#555; font-size:12px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase;">Window Height</label>
+                                    <input type="number" id="default-height" value="480" class="hex-input" style="width: 100%;  padding: 12px; background: #fdfdfd; color: #111; border: 1px solid #ddd; outline: none; font-family: 'Montserrat', sans-serif;">
+                                </div>
+                            </div>
+                            <div class="setting-group" style="padding-bottom:20px;">
+                                <label style="display:block; margin-bottom: 10px; color:#555; font-size:12px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase;">Global JVM Arguments</label>
+                                <textarea id="default-jvm" class="hex-input" style="width: 100%; height: 80px;  padding: 12px; background: #fdfdfd; color: #111; border: 1px solid #ddd; outline: none; font-family: 'Consolas', monospace; font-size: 13px; resize: vertical;">-XX:+UseG1GC -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50</textarea>
+                            </div>
+                            <div class="setting-group">
+                                <label style="display:block; margin-bottom: 10px; color:#555; font-size:12px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase;">Environmental Variables</label>
+                                <textarea id="default-env" class="hex-input" placeholder="e.g., MESA_GL_VERSION_OVERRIDE=4.3" style="width: 100%; height: 60px;  padding: 12px; background: #fdfdfd; color: #111; border: 1px solid #ddd; outline: none; font-family: 'Consolas', monospace; font-size: 13px; resize: vertical;"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Hooks (Requested in previous prompt, added here seamlessly) -->
+                    <div class="acc-item" onclick="toggleAccordion(this)">
+                        <div class="acc-header">
+                            <i class="fas fa-plug"></i>
+                            <span style="flex:1;">Lifecycle Hooks</span>
+                            <i class="fas fa-chevron-down acc-arrow"></i>
+                        </div>
+                        <div class="acc-content" onclick="event.stopPropagation()">
+                            <div class="setting-group" style="padding-bottom:15px;">
+                                <label style="display:block; margin-bottom: 8px; color:#555; font-size:12px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Pre Launch Script</label>
+                                <input type="text" id="hook-pre" class="hex-input" placeholder="Enter path to pre-launch script or command..." style="width: 100%;  padding: 12px; background: #fdfdfd; color: #111; border: 1px solid #ddd; outline: none; font-family: 'Consolas', monospace; font-size:13px;">
+                            </div>
+                            <div class="setting-group" style="padding-bottom:15px;">
+                                <label style="display:block; margin-bottom: 8px; color:#555; font-size:12px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Wrapper Command</label>
+                                <input type="text" id="hook-wrapper" class="hex-input" placeholder="e.g., mangohud" style="width: 100%;  padding: 12px; background: #fdfdfd; color: #111; border: 1px solid #ddd; outline: none; font-family: 'Consolas', monospace; font-size:13px;">
+                            </div>
+                            <div class="setting-group">
+                                <label style="display:block; margin-bottom: 8px; color:#555; font-size:12px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Post Exit Script</label>
+                                <input type="text" id="hook-post" class="hex-input" placeholder="Enter path to post-exit script..." style="width: 100%;  padding: 12px; background: #fdfdfd; color: #111; border: 1px solid #ddd; outline: none; font-family: 'Consolas', monospace; font-size:13px;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Appearance & Interface -->
+                    <div class="acc-item" onclick="toggleAccordion(this)">
+                        <div class="acc-header">
+                            <i class="fas fa-paint-brush"></i>
+                            <span style="flex:1;">Appearance & Interface</span>
+                            <i class="fas fa-chevron-down acc-arrow"></i>
+                        </div>
+                        <div class="acc-content" onclick="event.stopPropagation()">
+                            <div class="setting-group">
+                                <label style="display:block; margin-bottom: 10px; color:#555; font-size:12px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase;">App Theme</label>
+                                <select class="hex-input" id="theme-selector" style="width: 100%;  padding: 12px; background: #fdfdfd; color: #111; border: 1px solid #ddd; outline: none; font-family: 'Montserrat', sans-serif;">
+                                    <option value="light">Light Mode (Default)</option>
+                                    <option value="dark" disabled>Dark Mode (Coming Soon...)</option>
+                                    <option value="pink" disabled>Light Pink Mode (Coming Soon...)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+
+            <!-- INSTANCE DETAILS TAB (Moved from overlay) -->
+            <section id="instance-details-view" class="tab-section" style="display: none; padding: 0; background: var(--bg-color); height: 100vh; overflow-y: auto;">
+                <!-- Header -->
+                <div class="inst-header" style="background: var(--bg-color); padding: 20px 40px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                    <div class="inst-header-left" style="display: flex; gap: 20px; align-items: center;">
+                        <img id="inst-icon-lg" src="" class="inst-icon-lg" style="width: 64px; height: 64px;  object-fit: contain; background: var(--secondary-bg);">
+                        <div class="inst-meta-col">
+                            <h1 id="inst-name-lg" style="margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px; color: var(--text-color);">Instance Name</h1>
+                            <div class="inst-tags" style="display: flex; gap: 8px; margin-top: 8px;">
+                                <span id="inst-loader-tag" class="tag" style="background: var(--secondary-bg); padding: 2px 8px;  font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-color);">Fabric</span>
+                                <span id="inst-version-tag" class="tag" style="background: var(--secondary-bg); padding: 2px 8px;  font-size: 11px; font-weight: 600; color: var(--text-color);">1.21.1</span>
+                                <span id="inst-time-tag" class="tag" style="background: var(--secondary-bg); padding: 2px 8px;  font-size: 11px; font-weight: 600; color: var(--text-color);"><i class="far fa-clock"></i> 0m</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="inst-header-right" style="display: flex; gap: 8px; align-items: center;">
+                        <button id="inst-play-btn" class="cta-btn play-lg" style="padding: 10px 30px; font-size: 14px; margin-right: 5px;"><i class="fas fa-play"></i> PLAY</button>
+                        <button id="inst-settings-btn" class="icon-onyl-btn" data-tooltip="Settings"><i class="fas fa-cog"></i></button>
+                        <button id="inst-more-btn" class="icon-onyl-btn" data-tooltip="More Options"><i class="fas fa-bars"></i></button>
+                        <button id="inst-close-btn" class="icon-onyl-btn" style="color: #666;" data-tooltip="Close" onclick="NavSystem.goBack()"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+
+                <!-- Tabs -->
+                <div class="inst-tabs" style="background: var(--bg-color); padding: 0 40px; border-bottom: 1px solid var(--border-color); display: flex; gap: 30px;">
+                    <button class="inst-tab active" data-target="inst-content" style="background: none; border: none; padding: 15px 0; font-weight: 600; cursor: pointer; border-bottom: 2px solid var(--accent-color); color: var(--text-color);">Content</button>
+                    <button class="inst-tab" data-target="inst-worlds" style="background: none; border: none; padding: 15px 0; font-weight: 600; cursor: pointer; color: #999; border-bottom: 2px solid transparent;">Worlds</button>
+                    <button class="inst-tab" data-target="inst-schematics" style="background: none; border: none; padding: 15px 0; font-weight: 600; cursor: pointer; color: #999; border-bottom: 2px solid transparent;">Schematics</button>
+                    <button class="inst-tab" data-target="inst-screenshots" style="background: none; border: none; padding: 15px 0; font-weight: 600; cursor: pointer; color: #999; border-bottom: 2px solid transparent;">Screenshots</button>
+                    <button class="inst-tab" data-target="inst-logs" style="background: none; border: none; padding: 15px 0; font-weight: 600; cursor: pointer; color: #999; border-bottom: 2px solid transparent;">Logs</button>
+                </div>
+
+                <!-- Content Area -->
+                <div class="inst-view-content" style="padding: 30px 40px; background: var(--bg-color);">
+                    
+                    <!-- CONTENT TAB (Mods) -->
+                    <div id="inst-content" class="inst-tab-pane active">
+                        <div class="inst-toolbar" style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+                            <div class="search-box" style="position: relative; width: 300px;">
+                                <i class="fas fa-search" style="position: absolute; left: 12px; top: 10px; color: #999;"></i>
+                                <input type="text" placeholder="Search installed content..." style="width: 100%; padding: 8px 10px 8px 35px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-color);">
+                            </div>
+                            <div class="toolbar-actions" style="display: flex; gap: 10px;">
+                                 <button id="inst-install-content-btn" class="secondary-btn small" style="font-size: 12px;">+ Install Content</button>
+                                 <button class="secondary-btn small" style="font-size: 12px;"><i class="fas fa-sync"></i> Check Updates</button>
+                            </div>
+                        </div>
+                        
+                        <div class="content-list-header" style="display: flex; padding: 10px 20px; background: var(--secondary-bg); font-size: 11px; font-weight: 700; color: #777; ">
+                            <span style="flex:1">Name</span>
+                            <span style="width: 100px;">Version</span>
+                            <span style="width: 120px; text-align: right;">Actions</span>
+                        </div>
+                        <div id="inst-mods-list" class="content-list" style="background: var(--bg-color); border: 1px solid var(--border-color); border-top: none; ">
+                            <!-- Mod Rows injected here -->
+                            <div class="empty-state" style="padding: 30px; text-align: center; color: #999;">No content installed.</div>
+                        </div>
+                         <!-- Pagination controls -->
+                        <div id="inst-mods-pagination" style="display:none; align-items:center; justify-content:space-between; padding:12px 20px; border:1px solid #eee; border-top:none; background:#fafafa;">
+                            <button id="mods-prev-btn" class="secondary-btn small" style="font-size:12px;" onclick="LibraryManager._modsPagePrev()"><i class="fas fa-chevron-left"></i> Prev</button>
+                            <span id="mods-page-info" style="font-size:12px; color:#666; font-weight:600;">Page 1 of 1</span>
+                            <button id="mods-next-btn" class="secondary-btn small" style="font-size:12px;" onclick="LibraryManager._modsPageNext()">Next <i class="fas fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- WORLDS TAB -->
+                    <div id="inst-worlds" class="inst-tab-pane" style="display: none;">
+                        <div class="inst-toolbar">
+                            <button class="secondary-btn small" disabled style="opacity: 0.5; cursor: not-allowed;"><i class="fas fa-file-import"></i> Import World</button>
+                        </div>
+                        <div id="inst-worlds-list" class="grid-list" style="margin-top: 20px;">
+                            <div class="empty-state" style="padding: 30px; text-align: center; color: #999;">No worlds found.</div>
+                        </div>
+
+                        <!-- Servers section -->
+                        <div style="margin-top: 32px;">
+                            <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+                                <i class="fas fa-server" style="color:#aaa; font-size:13px;"></i>
+                                <span style="font-size:12px; font-weight:800; color:#aaa; text-transform:uppercase; letter-spacing:1px;">Servers</span>
+                                <div style="flex:1; height:1px; background:var(--border-color);"></div>
+                            </div>
+                            <div id="inst-servers-list" style="border:1px solid var(--border-color); border-radius:8px; overflow:hidden; background:var(--bg-color);">
+                                <div class="empty-state" style="padding:24px; text-align:center; color:#bbb;">No servers found.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SCHEMATICS TAB -->
+                    <div id="inst-schematics" class="inst-tab-pane" style="display: none;">
+                        <div class="inst-toolbar">
+                            <button class="secondary-btn small">Import Schematic</button>
+                        </div>
+                        <div id="inst-schematics-list" class="grid-list">
+                            <div class="empty-state" style="padding: 30px; text-align: center; color: #999;">No schematics found.</div>
+                        </div>
+                    </div>
+
+                    <!-- SCREENSHOTS TAB -->
+                    <div id="inst-screenshots" class="inst-tab-pane" style="display: none;">
+                        <div class="gallery-options" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size:13px; color:#888;" id="screenshots-count"></span>
+                            <button class="secondary-btn small" onclick="if(window._currentInstanceDetails && window.electron) window.electron.openFolder((window._currentInstanceDetails.folder || window._currentInstanceDetails.path) + '/screenshots')">
+                                <i class="fas fa-folder-open"></i> Open Folder
+                            </button>
+                        </div>
+                        <div id="inst-screenshots-grid" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
+                            <div class="empty-state" style="padding: 30px; text-align: center; color: #999; grid-column: 1 / -1;">No screenshots yet.</div>
+                        </div>
+                    </div>
+
+                    <!-- LOGS TAB -->
+                    <div id="inst-logs" class="inst-tab-pane" style="display: none;">
+                         <div class="logs-container" id="inst-logs-container" style="background: #1e1e1e; color: #dcdcdc; font-family: monospace; padding: 20px;  height: 500px; overflow-y: auto;">
+                             Logs will appear here.
+                         </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Duplicate Modal Logic Removed to Fix Focus Issues -->
+
+    <div id="instance-name-modal" class="modal-overlay" style="display:none; z-index: 40000;">
+        <div class="modal-content" style="width: 400px; background:var(--card-bg); padding:20px;   box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+             <h3 style="margin-bottom:15px; color:var(--text-color);">Create Instance</h3>
+             <p style="margin-bottom:10px; color:#666; font-size:13px;">Name your new instance folder.</p>
+             <input type="text" id="new-instance-name" class="search-bar" style="width:100%; margin-bottom:15px; background:var(--secondary-bg); color:var(--text-color);" placeholder="Instance Name...">
+             
+               <div style="display:flex; justify-content: flex-end; gap:10px;">
+                   <button class="secondary-btn" id="cancel-inst-name">Cancel</button>
+                   <button class="cta-btn" id="confirm-inst-name">Create</button>
+             </div>
         </div>
     </div>
 
-    <div id="select-instance-modal" class="modal-overlay" style="display: none; z-index: 6000;">
-        <div class="wardrobe-content" style="height: auto; max-height: 80vh; width: 400px;">
+    <div id="select-instance-modal" class="modal-overlay" style="display: none; z-index: 40000;">
+        <div class="wardrobe-content" style="height: auto; max-height: 80vh; width: 400px; background:var(--card-bg);">
             <div class="wardrobe-header">
-                <h2>Select Instance</h2>
+                <h2 style="color:var(--text-color);">Select Instance</h2>
                 <button id="close-select-inst-btn" class="close-action-btn"><i class="fas fa-times"></i></button>
             </div>
             <div class="wardrobe-body" style="padding: 20px; flex-direction: column;">
-                <p style="color:#ccc; margin-bottom: 15px;">Choose where to install this mod:</p>
+                <p style="color:var(--subtext-color); margin-bottom: 15px;">Choose where to install this mod:</p>
                 <div id="instance-selection-list" style="display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: 300px;">
                     <!-- Injected Instances -->
                 </div>
@@ -656,63 +1286,815 @@
         </div>
     </div>
     
-    <div id="instance-details-modal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 8000; flex-direction: column;">
-        <div class="inst-view-header" style="background: #111; padding: 20px 40px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; width: 100%;">
-            <div style="display:flex; gap: 20px; align-items: center;">
-                <div style="width: 64px; height: 64px; background: #333; border-radius: 12px; display:flex; align-items:center; justify-content:center;">
-                    <i class="fas fa-cube" style="font-size: 30px; color: #666;"></i>
-                </div>
-                <div>
-                    <h1 id="inst-view-name" style="margin: 0; font-size: 24px; font-family: 'Space Grotesk';">Instance Name</h1>
-                    <div style="display:flex; gap:10px; margin-top:5px; font-size: 13px; color: #888;">
-                        <span id="inst-view-version">1.20.1</span>
-                        <span>•</span>
-                        <span id="inst-view-loader">Fabric</span>
-                    </div>
-                </div>
-            </div>
-            <div style="display:flex; gap:10px;">
-                <button id="inst-view-play-btn" class="cta-btn" style="padding: 10px 40px; font-size: 16px;">JOUER</button>
-                <button id="inst-view-close-btn" style="background:transparent; border:none; color:white; font-size:24px; cursor:pointer; padding: 0 20px;">&times;</button>
-            </div>
+    <!-- PROJECT DETAILS VIEW (Overlay inside Browser Tab) -->
+    <div id="project-details-view" style="display: none; position: fixed; top: 30px; left: 0; width: 100vw; height: calc(100vh - 30px); background: var(--bg-color); z-index: 30000; overflow-y: auto;">
+         <!-- Header -->
+         <div class="detail-header">
+             <div class="detail-icon-wrapper">
+                 <img id="detail-icon" src="" alt="Icon">
+             </div>
+             <div class="detail-meta">
+                 <h1 style="" id="detail-title">Project Title</h1>
+                 <p id="detail-desc">Short description of the project goes here. It can be a bit longer to test max width.</p>
+                 <div class="detail-actions">
+                     <button id="detail-install-btn" class="cta-btn safe-btn">INSTALL</button>
+                     <button id="detail-web-btn" class="secondary-btn">OFFICIAL PAGE</button>
+                     <button id="detail-close-btn" class="secondary-btn" style="border-color: #ddd; color: #999;">BACK</button>
+                 </div>
+             </div>
+         </div>
+
+         <!-- Layout -->
+         <div class="detail-layout">
+             <!-- Main Content -->
+             <div class="detail-main">
+                 <div class="tab-nav">
+                     <button class="tab-btn active" data-target="tab-description">DESCRIPTION</button>
+                     <button class="tab-btn" data-target="tab-gallery">GALLERY</button>
+                     <button class="tab-btn" data-target="tab-versions">VERSIONS</button>
+                 </div>
+                 
+                 <div class="detail-content-area">
+                     <div id="tab-description" class="detail-tab active">
+                         <div id="markdown-content" class="markdown-body">
+                             <!-- Injected HTML -->
+                         </div>
+                     </div>
+                     <div id="tab-gallery" class="detail-tab">
+                         <div id="gallery-grid" class="gallery-grid">
+                             <!-- Images -->
+                         </div>
+                     </div>
+                     <div id="tab-versions" class="detail-tab">
+                         <div id="versions-list-container">
+                             <!-- Versions Control -->
+                             <div class="pagination-controls" style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+                                 <button id="ver-prev" class="secondary-btn small">Previous</button>
+                                 <span id="ver-page-info" style="align-self: center; font-size: 12px; font-weight: bold;">Page 1</span>
+                                 <button id="ver-next" class="secondary-btn small">Next</button>
+                             </div>
+                             <div id="versions-list">
+                                 <!-- Version Rows -->
+                             </div>
+                         </div>
+                     </div>
+                 </div>
+             </div>
+
+             <!-- Sidebar -->
+             <div class="detail-sidebar">
+                 <div class="sidebar-box">
+                     <h4>LATEST VERSIONS</h4>
+                     <div id="sidebar-versions">
+                         <!-- Quick Links -->
+                     </div>
+                 </div>
+                 <div class="sidebar-box">
+                     <h4>INFORMATION</h4>
+                     <ul class="info-list">
+                         <li><span>License</span> <b id="info-license">MIT</b></li>
+                         <li><span>Downloads</span> <b id="info-downloads">120k</b></li>
+                         <li><span>Updated</span> <b id="info-updated">2 days ago</b></li>
+                     </ul>
+                 </div>
+             </div>
+         </div>
+    </div>
+
+    <!-- Context Menu for Instances -->
+    <div id="inst-context-menu" style="display: none; position: absolute; background: #fff; border: 1px solid #eee; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-radius: 6px; z-index: 5000; min-width: 180px;">
+        <div class="ctx-item" id="ctx-open-folder" style="padding: 10px 15px; cursor: pointer; font-size: 13px; color: #333; display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-folder"></i> Open Folder
         </div>
-        
-        <div class="inst-view-body" style="flex:1; width: 100%; padding: 40px; display: flex; gap: 30px; overflow: hidden;">
-            <!-- Tabs/Sidebar -->
-            <div class="inst-sidebar" style="width: 200px; display:flex; flex-direction:column; gap: 10px;">
-                <button class="inst-tab active" data-target="inst-logs" style="text-align:left; padding: 15px; background: #222; border:none; color:white; border-radius: 6px; cursor:pointer;">Logs</button>
-                <button class="inst-tab" data-target="inst-settings" style="text-align:left; padding: 15px; background: transparent; border:none; color:#888; border-radius: 6px; cursor:pointer;">Options</button>
-                <button id="inst-delete-btn" style="text-align:left; padding: 15px; background: transparent; border:1px solid #d00; color:#d00; border-radius: 6px; cursor:pointer; margin-top: auto;">Supprimer</button>
+        <div class="ctx-item" id="ctx-export-pack" style="padding: 10px 15px; cursor: pointer; font-size: 13px; color: #333; display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-box-open"></i> Export Modpack
+        </div>
+        <div style="height: 1px; background: #eee; margin: 5px 0;"></div>
+        <div class="ctx-item" id="ctx-duplicate" style="padding: 10px 15px; cursor: pointer; font-size: 13px; color: #333; display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-copy"></i> Duplicate
+        </div>
+        <div class="ctx-item" id="ctx-delete" style="padding: 10px 15px; cursor: pointer; font-size: 13px; color: #d00; display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-trash"></i> Delete Instance
+        </div>
+    </div>
+
+
+
+        <!-- NEW INSTANCE MODAL -->
+    <div id="new-instance-modal" class="modal-overlay">
+        <div class="modal-container" style="width:580px; max-width:96%; background:var(--card-bg); border:1px solid var(--border-color); padding:0; border-radius:12px; overflow:hidden; box-shadow:var(--hover-shadow);">
+
+            <!-- Header -->
+            <div style="background:var(--card-bg); border-bottom:1px solid var(--border-color); padding:18px 24px; display:flex; justify-content:space-between; align-items:center;">
+                <h2 style="font-weight:800; color:#111; font-size:17px; margin:0; letter-spacing:0.3px;">Create Instance</h2>
+                <button id="close-modal-btn" style="background:none; border:none; font-size:20px; color:#aaa; cursor:pointer; width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:6px; transition:background 0.15s;" onmouseenter="this.style.background='#f5f5f5'" onmouseleave="this.style.background='none'"><i class="fas fa-times"></i></button>
             </div>
-            
-            <!-- Content -->
-            <div class="inst-content" style="flex:1; background: #1a1a1a; border-radius: 12px; border: 1px solid #333; overflow: hidden; display:flex; flex-direction:column;">
-                
-                <!-- Logs Tab -->
-                <div id="inst-logs" class="inst-tab-pane" style="display: flex; flex-direction:column; height: 100%;">
-                    <div class="logs-header" style="padding: 15px; border-bottom: 1px solid #333; background: #222; font-size: 12px; font-family: monospace; color: #aaa;">
-                        CONSOLE OUTPUT
+
+            <!-- Tabs -->
+            <div style="display:flex; border-bottom:1px solid var(--border-color); background:var(--secondary-bg);">
+                <button class="nim-tab active" data-nim-tab="custom" style="flex:1; padding:12px 8px; border:none; background:none; font-family:'Montserrat',sans-serif; font-size:12px; font-weight:700; cursor:pointer; color:#111; border-bottom:2px solid #111; transition:all 0.15s;" onclick="nimSwitchTab('custom', this)"><i class="fas fa-cube" style="margin-right:5px;"></i>Custom</button>
+                <button class="nim-tab" data-nim-tab="modrinth" style="flex:1; padding:12px 8px; border:none; background:none; font-family:'Montserrat',sans-serif; font-size:12px; font-weight:700; cursor:pointer; color:#888; border-bottom:2px solid transparent; transition:all 0.15s;" onclick="nimSwitchTab('modrinth', this)"><i class="fas fa-rocket" style="margin-right:5px;"></i>Other Launcher</button>
+                <button class="nim-tab" data-nim-tab="file" style="flex:1; padding:12px 8px; border:none; background:none; font-family:'Montserrat',sans-serif; font-size:12px; font-weight:700; cursor:pointer; color:#888; border-bottom:2px solid transparent; transition:all 0.15s;" onclick="nimSwitchTab('file', this)"><i class="fas fa-file-archive" style="margin-right:5px;"></i>From File</button>
+            </div>
+
+            <!-- Body -->
+            <div id="nim-body" style="padding:24px; background:var(--card-bg); max-height:68vh; overflow-y:auto; display:flex; flex-direction:column; gap:20px;">
+
+                <!-- === TAB: CUSTOM === -->
+                <div id="nim-tab-custom" class="nim-tab-panel">
+
+                    <!-- Icon picker -->
+                    <div style="display:flex; gap:16px; align-items:flex-start;">
+                        <div id="nim-icon-preview" style="width:72px; height:72px; border-radius:8px; border:2px dashed #ddd; background:#fafafa; display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0; cursor:pointer; transition:border-color 0.2s; background-size:cover; background-position:center;" onclick="document.getElementById('nim-icon-file').click()" title="Click to pick an icon" onmouseenter="this.style.borderColor='#333'" onmouseleave="this.style.borderColor='#ddd'">
+                            <i class="fas fa-camera" id="nim-icon-placeholder" style="font-size:22px; color:#ccc; pointer-events:none;"></i>
+                        </div>
+                        <input type="file" id="nim-icon-file" accept="image/*" style="display:none;">
+                        <input type="hidden" id="nim-icon-b64" value="">
+                        <div style="display:flex; flex-direction:column; gap:8px; justify-content:center;">
+                            <button onclick="document.getElementById('nim-icon-file').click()" style="padding:8px 14px; font-size:12px; font-weight:700; font-family:'Montserrat',sans-serif; background:#f5f5f5; border:1px solid #e0e0e0; border-radius:6px; color:#333; cursor:pointer; transition:background 0.15s; display:flex; align-items:center; gap:6px;" onmouseenter="this.style.background='#ebebeb'" onmouseleave="this.style.background='#f5f5f5'"><i class="fas fa-upload"></i> Upload icon</button>
+                            <button onclick="nimClearIcon()" style="padding:8px 14px; font-size:12px; font-weight:700; font-family:'Montserrat',sans-serif; background:none; border:1px solid transparent; border-radius:6px; color:#aaa; cursor:pointer; transition:color 0.15s; display:flex; align-items:center; gap:6px;" onmouseenter="this.style.color='#333'" onmouseleave="this.style.color='#aaa'"><i class="fas fa-times"></i> Remove</button>
+                        </div>
                     </div>
-                    <div id="inst-logs-container" style="flex:1; overflow-y: auto; padding: 15px; font-family: 'Consolas', monospace; font-size: 12px; color: #ddd; white-space: pre-wrap; user-select: text;">
-                        Waiting for game launch...
+
+                    <!-- Name -->
+                    <div>
+                        <label style="display:block; font-size:11px; font-weight:800; color:#555; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">Name</label>
+                        <input type="text" id="nim-name" placeholder="My Minecraft Instance" autocomplete="off"
+                            style="width:100%; box-sizing:border-box; padding:10px 14px; border:1.5px solid var(--border-color); border-radius:8px; font-size:14px; font-family:'Montserrat',sans-serif; color:var(--text-color); outline:none; transition:border-color 0.2s; background:var(--secondary-bg);"
+                            onfocus="this.style.borderColor='var(--text-color)'; this.style.background='var(--card-bg)';" onblur="this.style.borderColor='var(--border-color)'; this.style.background='var(--secondary-bg)';">
+                    </div>
+
+                    <!-- Loader -->
+                    <div>
+                        <label style="display:block; font-size:11px; font-weight:800; color:#555; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">Mod Loader</label>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                            <button class="nim-loader-btn active" data-loader="vanilla" onclick="nimSetLoader('vanilla',this)">Vanilla</button>
+                            <button class="nim-loader-btn" data-loader="fabric" onclick="nimSetLoader('fabric',this)">Fabric</button>
+                            <button class="nim-loader-btn" data-loader="forge" onclick="nimSetLoader('forge',this)">Forge</button>
+                            <button class="nim-loader-btn" data-loader="neoforge" onclick="nimSetLoader('neoforge',this)">NeoForge</button>
+                            <button class="nim-loader-btn" data-loader="quilt" onclick="nimSetLoader('quilt',this)">Quilt</button>
+                        </div>
+                        <input type="hidden" id="nim-loader" value="vanilla">
+                    </div>
+
+                    <!-- Version -->
+                    <div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <label style="font-size:11px; font-weight:800; color:#555; text-transform:uppercase; letter-spacing:0.5px;">Game Version</label>
+                            <label style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#666; cursor:pointer;">
+                                <input type="checkbox" id="nim-show-all" style="accent-color:#111;" onchange="if(window.nimUpdateVersions) nimUpdateVersions();">
+                                Show all
+                            </label>
+                        </div>
+                        <select id="nim-version"
+                            style="width:100%; box-sizing:border-box; padding:10px 14px; border:1.5px solid var(--border-color); border-radius:8px; font-size:13px; font-family:'Montserrat',sans-serif; color:var(--text-color); outline:none; background:var(--secondary-bg); cursor:pointer; transition:border-color 0.2s;"
+                            onfocus="this.style.borderColor='var(--text-color)'" onblur="this.style.borderColor='var(--border-color)'">
+                            <option value="">Loading…</option>
+                        </select>
                     </div>
                 </div>
 
-                <!-- Settings Tab -->
-                <div id="inst-settings" class="inst-tab-pane" style="display: none; padding: 30px;">
-                    <h3>Configuration de l'instance</h3>
-                    <p style="color:#666; margin-bottom: 20px;">Modifiers les paramètres spécifiques.</p>
+                <!-- === TAB: OTHER LAUNCHER === -->
+                <div id="nim-tab-modrinth" class="nim-tab-panel" style="display:none;">
+
+                    <p style="margin:0 0 12px; font-size:12px; color:#888;">Select a launcher to scan its installed instances, then pick one to import.</p>
+
+                    <!-- Launcher cards -->
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <button class="nim-launcher-card" id="nlc-curseforge" onclick="nimScanLauncher('curseforge', this)">
+                            <img src="https://www.curseforge.com/favicon.ico" style="width:22px; height:22px; border-radius:4px; object-fit:contain;" onerror="this.style.display='none'">
+                            <span>CurseForge</span>
+                        </button>
+                        <button class="nim-launcher-card" id="nlc-modrinth" onclick="nimScanLauncher('modrinth', this)">
+                            <img src="https://avatars.githubusercontent.com/u/67560307" style="width:22px; height:22px; border-radius:50%; object-fit:contain;" onerror="this.style.display='none'">
+                            <span>Modrinth App</span>
+                        </button>
+                    </div>
+                    <p style="margin:4px 0 0; font-size:11px; color:#bbb;"><i class="fas fa-clock" style="margin-right:4px;"></i>More launchers coming soon — PrismLauncher, MultiMC…</p>
+
+                    <!-- Scan state -->
+                    <div id="nim-launcher-state" style="display:none; flex-direction:column; gap:8px;">
+                        <div id="nim-launcher-loading" style="display:none; font-size:13px; color:#888; text-align:center; padding:20px 0;"><i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Scanning…</div>
+                        <div id="nim-launcher-err" style="display:none; padding:10px 14px; border-radius:8px; background:#fff5f5; color:#c00; font-size:12px; font-weight:600; border:1px solid #fcc;"></div>
+                        <div id="nim-launcher-list" style="display:flex; flex-direction:column; gap:6px; max-height:230px; overflow-y:auto;"></div>
+                    </div>
+                </div>
+
+                <!-- === TAB: FROM FILE === -->
+                <div id="nim-tab-file" class="nim-tab-panel" style="display:none;">
+
+                    <p style="margin:0 0 4px; font-size:12px; color:#888;">Restore an instance from a <b>.hexa</b> file (Hexa Launcher backup).</p>
+
+                    <input type="file" id="nim-file-pick" accept=".hexa" style="display:none;">
+
+                    <div id="nim-file-dropzone"
+                        style="border:2px dashed var(--border-color); border-radius:10px; padding:40px 20px; text-align:center; cursor:pointer; background:var(--secondary-bg); transition:all 0.2s;"
+                        onclick="document.getElementById('nim-file-pick').click()"
+                        onmouseenter="this.style.borderColor='var(--text-color)'; this.style.background='var(--card-bg)';"
+                        onmouseleave="this.style.borderColor='var(--border-color)'; this.style.background='var(--secondary-bg)';"
+                        ondragover="event.preventDefault(); this.style.borderColor='var(--text-color)'; this.style.background='var(--hover-color)';"
+                        ondragleave="this.style.borderColor='var(--border-color)'; this.style.background='var(--secondary-bg)';"
+                        ondrop="event.preventDefault(); nimHandleFileDrop(event.dataTransfer.files[0]); this.style.borderColor='var(--border-color)'; this.style.background='var(--secondary-bg)';">
+                        <i class="fas fa-box-open" style="font-size:36px; color:#ccc; display:block; margin-bottom:10px;"></i>
+                        <p style="margin:0; font-size:13px; font-weight:700; color:#555;">Click or drop .hexa file here</p>
+                        <p style="margin:4px 0 0; font-size:11px; color:#aaa;">.hexa — Hexa Launcher Backup</p>
+                    </div>
+
+                    <!-- File preview -->
+                    <div id="nim-file-preview" style="display:none; border:1.5px solid #e0e0e0; border-radius:10px; padding:14px 16px; background:#fafafa; gap:12px; align-items:center;">
+                        <i class="fas fa-box-open" style="font-size:28px; color:#555; flex-shrink:0;"></i>
+                        <div style="flex:1; min-width:0;">
+                            <div id="nim-file-name" style="font-weight:700; font-size:14px; color:#111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+                            <div id="nim-file-type" style="font-size:12px; color:#888; margin-top:2px;"></div>
+                        </div>
+                        <button onclick="nimClearFile()" style="background:none; border:none; cursor:pointer; color:#aaa; font-size:16px;" title="Remove"><i class="fas fa-times"></i></button>
+                    </div>
+
+                    <div id="nim-file-error" style="display:none; padding:10px 14px; border-radius:8px; background:#fff5f5; color:#c00; font-size:12px; font-weight:600; border:1px solid #fcc;"></div>
+
+                    <!-- More compatibility -->
+                    <div style="border-top:1px solid #f0f0f0; padding-top:10px; margin-top:4px;">
+                        <button id="nim-compat-btn" onclick="nimToggleCompat(this)"
+                            style="background:none; border:none; font-family:'Montserrat',sans-serif; font-size:11px; font-weight:700; color:#aaa; cursor:pointer; display:flex; align-items:center; gap:6px; padding:0; transition:color 0.15s;"
+                            onmouseenter="this.style.color='#555'" onmouseleave="this.style.color='#aaa'">
+                            <i class="fas fa-chevron-right" id="nim-compat-chevron" style="font-size:9px; transition:transform 0.2s;"></i>
+                            More compatibility (.mrpack, .zip)
+                        </button>
+                        <div id="nim-more-compat" style="display:none; margin-top:12px; flex-direction:column; gap:10px;">
+                            <p style="margin:0; font-size:11px; color:#aaa;">Importer un <b>.mrpack</b> (Modrinth) ou <b>.zip</b> (CurseForge).</p>
+                            <input type="file" id="nim-file-pick-compat" accept=".mrpack,.zip" style="display:none;" onchange="if(this.files[0]) nimHandleFileExt(this.files[0])">
+                            <div style="border:2px dashed #eee; border-radius:8px; padding:24px; text-align:center; cursor:pointer; background:#fafafa; transition:all 0.2s;"
+                                onclick="document.getElementById('nim-file-pick-compat').click()"
+                                onmouseenter="this.style.borderColor='#999'; this.style.background='#f5f5f5';"
+                                onmouseleave="this.style.borderColor='#eee'; this.style.background='#fafafa';"
+                                ondragover="event.preventDefault(); this.style.borderColor='#999';"
+                                ondragleave="this.style.borderColor='#eee';"
+                                ondrop="event.preventDefault(); nimHandleFileExt(event.dataTransfer.files[0]); this.style.borderColor='#eee';">
+                                <i class="fas fa-file-archive" style="font-size:22px; color:#ccc; display:block; margin-bottom:6px;"></i>
+                                <p style="margin:0; font-size:12px; font-weight:700; color:#777;">Click or drop .mrpack / .zip</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Footer -->
+            <div style="padding:16px 24px; background:var(--card-bg); border-top:1px solid var(--border-color); display:flex; justify-content:flex-end; gap:10px; flex-shrink:0;">
+                <button id="cancel-create-btn" style="padding:10px 20px; border:1.5px solid var(--border-color); border-radius:8px; background:var(--card-bg); font-size:13px; font-weight:700; font-family:'Montserrat',sans-serif; color:var(--text-color); cursor:pointer; transition:background 0.15s;" onmouseenter="this.style.background='var(--secondary-bg)'" onmouseleave="this.style.background='var(--card-bg)'"><i class="fas fa-times" style="margin-right:6px;"></i>Cancel</button>
+                <button id="confirm-create-btn" style="padding:10px 24px; border:none; border-radius:8px; background:#111; color:#fff; font-size:13px; font-weight:700; font-family:'Montserrat',sans-serif; cursor:pointer; display:flex; align-items:center; gap:8px; transition:opacity 0.2s;" onmouseenter="this.style.opacity='0.85'" onmouseleave="this.style.opacity='1'"><i class="fas fa-plus"></i> Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inline styles for new-instance-modal components -->
+    <style>
+        .nim-loader-btn {
+            padding: 7px 14px; font-size: 12px; font-weight: 700;
+            font-family: 'Montserrat', sans-serif;
+            border: 1.5px solid var(--border-color); border-radius: 20px;
+            background: var(--secondary-bg); color: #666; cursor: pointer; transition: all 0.15s;
+        }
+        .nim-loader-btn:hover { background: var(--border-color); color: #333; }
+        .nim-loader-btn.active { background: #111; color: #fff; border-color: #111; }
+        #nim-file-preview { display: flex !important; }
+        .nim-launcher-card {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 18px; border: 1.5px solid var(--border-color); border-radius: 10px;
+            background: var(--secondary-bg); color: #333; font-size: 13px; font-weight: 700;
+            font-family: 'Montserrat', sans-serif; cursor: pointer; transition: all 0.15s;
+        }
+        .nim-launcher-card:hover { background: var(--border-color); border-color: #bbb; }
+        .nim-launcher-card.active { background: #111; color: #fff; border-color: #111; }
+        .nim-inst-card {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 14px; border: 1.5px solid var(--border-color); border-radius: 8px;
+            background: var(--card-bg); cursor: pointer; transition: all 0.15s;
+        }
+        .nim-inst-card:hover { border-color: #111; background: var(--secondary-bg); }
+        .nim-inst-card.selected { border-color: #111; background: #f5f5f5; }
+        #nim-launcher-list::-webkit-scrollbar { width: 4px; }
+        #nim-launcher-list::-webkit-scrollbar-track { background: transparent; }
+        #nim-launcher-list::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+
+        /* SOCIAL HUB STYLES - Injected Fix */
+        .soc-wrapper { display: flex; flex: 1; height: 100%; overflow: hidden; gap: 20px; padding-top: 10px; }
+        .soc-sidebar { width: 260px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid var(--border-color); padding-right: 15px; }
+        .soc-main { flex: 1; display: flex; flex-direction: column; background: var(--bg-color); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; box-shadow: 0 5px 20px rgba(0,0,0,0.03); }
+        .soc-header { padding: 12px 20px; background: var(--bg-color); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; height: 60px; }
+        .soc-messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background: var(--secondary-bg); }
+        .soc-input-area { padding: 15px; background: var(--bg-color); border-top: 1px solid var(--border-color); }
+        .soc-input-box { display: flex; gap: 10px; align-items: center; background: var(--secondary-bg); border-radius: 24px; padding: 6px 12px; border: 1px solid var(--border-color); }
+        .soc-input { border: none; background: transparent; flex: 1; padding: 8px; font-family: inherit; font-size: 14px; outline: none; }
+        .soc-btn-icon { background: none; border: none; cursor: pointer; color: #aaa; padding: 6px; font-size: 16px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
+        .soc-btn-icon:hover { color: #333; transform: scale(1.1); }
+        .soc-btn-icon.highlight { color: #111; }
+        
+        .soc-msg-sent { align-self: flex-end; background: #111; color: #fff; padding: 10px 16px; border-radius: 18px 18px 4px 18px; max-width: 70%; font-size: 13px; line-height: 1.4; word-wrap: break-word; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .soc-msg-received { align-self: flex-start; background: var(--bg-color); color: var(--text-color); padding: 10px 16px; border-radius: 18px 18px 18px 4px; max-width: 70%; font-size: 13px; line-height: 1.4; word-wrap: break-word; border: 1px solid var(--border-color); box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
+        
+        .soc-user { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: background 0.1s; border: 1px solid transparent; }
+        .soc-user:hover { background: var(--secondary-bg); border-color: var(--border-color); }
+        .soc-user.active { background: var(--secondary-bg); border-color: var(--border-color); }
+        .soc-avatar { width: 36px; height: 36px; position: relative; }
+        .soc-avatar img { width: 100%; height: 100%; border-radius: 10px; object-fit: cover; }
+        .soc-status-badge { width: 10px; height: 10px; border-radius: 50%; position: absolute; bottom: -2px; right: -2px; border: 2px solid var(--bg-color); }
+        .status-online { background: #2ecc71; }
+        .status-offline { background: #ccc; }
+        .soc-info { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
+        .soc-name { font-weight: 700; font-size: 13px; color: #222; margin-bottom: 2px; }
+        .soc-activity { font-size: 11px; color: #888; }
+        .soc-group { font-size: 10px; font-weight: 800; color: #bbb; margin: 15px 0 8px 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        /* DISCORD STYLE CHAT */
+        .msg-row { display: flex; gap: 12px; padding: 8px 16px; position: relative; transition: background 0.1s; margin-bottom: 4px; }
+        .msg-row:hover { background: rgba(0,0,0,0.03); }
+        .msg-row:hover .msg-actions { opacity: 1; pointer-events: auto; }
+        
+        .msg-avatar { flex-shrink: 0; width: 40px; height: 40px; }
+        .msg-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; cursor: pointer; transition: opacity 0.2s; }
+        .msg-avatar img:hover { opacity: 0.8; }
+        
+        .msg-content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        
+        .msg-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+        .msg-author { font-weight: 700; font-size: 14px; color: #111; cursor: pointer; }
+        .msg-author:hover { text-decoration: underline; }
+        .msg-date { font-size: 11px; color: #72767d; font-weight: 500; }
+        
+        .msg-text { font-size: 14px; color: #2e3338; line-height: 1.4; word-wrap: break-word; white-space: pre-wrap; font-family: 'Inter', sans-serif; }
+        
+        .msg-actions { 
+            position: absolute; right: 16px; top: -10px; 
+            background: #fff; border: 1px solid #e3e5e8; border-radius: 4px; 
+            display: flex; opacity: 0; pointer-events: none; transition: opacity 0.1s; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05); z-index: 10;
+        }
+        .msg-action-btn { background: none; border: none; padding: 6px 10px; cursor: pointer; color: #4f545c; font-size: 14px; transition: background 0.1s; }
+        .msg-action-btn:hover { background: #f2f3f5; color: #2e3338; }
+        .msg-action-btn.danger:hover { color: #ed4245; }
+        
+        .emoji-picker-btn { position: absolute; right: 10px; bottom: 10px; background: none; border: none; cursor: pointer; color: #b9bbbe; font-size: 20px; transition: color 0.2s; }
+        .emoji-picker-btn:hover { color: #f1c40f; }
+
+        /* Editing Mode */
+        .msg-edit-area { margin-top: 4px; background: #f2f3f5; padding: 8px; border-radius: 8px; }
+        .msg-edit-input { width: 100%; border: none; background: transparent; font-family: inherit; font-size: 14px; outline: none; color: #2e3338; margin-bottom: 6px; }
+        .msg-edit-info { font-size: 11px; color: #72767d; }
+    </style>
+
+    <script>
+        // ── New Instance Modal helpers ──────────────────────────────
+        let _nimCurrentTab = 'custom';
+        let _nimMrProject  = null;
+        let _nimFileData   = null; // { filePath, type: 'hexa'|'mrpack'|'zip' }
+        let _nimSelectedLauncherInst = null;
+
+        function nimSwitchTab(tab, btn) {
+            _nimCurrentTab = tab;
+            document.querySelectorAll('.nim-tab').forEach(b => {
+                b.style.color = '#888'; b.style.borderBottomColor = 'transparent'; b.classList.remove('active');
+            });
+            btn.style.color = '#111'; btn.style.borderBottomColor = '#111'; btn.classList.add('active');
+            document.querySelectorAll('.nim-tab-panel').forEach(p => p.style.display = 'none');
+            document.getElementById('nim-tab-' + tab).style.display = 'flex';
+            document.getElementById('nim-tab-' + tab).style.flexDirection = 'column';
+            document.getElementById('nim-tab-' + tab).style.gap = '20px';
+
+            // Confirm button label
+            const btn2 = document.getElementById('confirm-create-btn');
+            if (btn2) btn2.innerHTML = tab === 'custom'
+                ? '<i class="fas fa-plus"></i> Create'
+                : '<i class="fas fa-download"></i> Import';
+
+            // Load versions for custom tab
+            if (tab === 'custom' && window.nimUpdateVersions) nimUpdateVersions();
+        }
+
+        function nimSetLoader(val, el) {
+            document.getElementById('nim-loader').value = val;
+            document.querySelectorAll('.nim-loader-btn').forEach(b => b.classList.remove('active'));
+            el.classList.add('active');
+            if (window.nimUpdateVersions) nimUpdateVersions();
+        }
+
+        function nimClearIcon() {
+            document.getElementById('nim-icon-file').value = '';
+            document.getElementById('nim-icon-b64').value = '';
+            document.getElementById('nim-icon-preview').style.backgroundImage = 'none';
+            document.getElementById('nim-icon-preview').style.border = '2px dashed #ddd';
+            document.getElementById('nim-icon-placeholder').style.display = '';
+        }
+
+        document.getElementById('nim-icon-file').addEventListener('change', function(e) {
+            const file = e.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                const b64 = ev.target.result;
+                document.getElementById('nim-icon-b64').value = b64;
+                document.getElementById('nim-icon-preview').style.backgroundImage = 'url(' + b64 + ')';
+                document.getElementById('nim-icon-preview').style.border = '2px solid #111';
+                document.getElementById('nim-icon-placeholder').style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        });
+
+        document.getElementById('nim-file-pick').addEventListener('change', function(e) {
+            const f = e.target.files[0]; if (f) nimHandleFile(f);
+        });
+
+        function nimHandleFileDrop(file) { if (file) nimHandleFile(file); }
+
+        function nimHandleFile(file) {
+            if (!file.name.endsWith('.hexa')) {
+                nimShowFileError('Unsupported format. Please select a .hexa file, or use the "More compatibility" section below.');
+                return;
+            }
+            nimShowFileError('');
+            _nimFileData = { filePath: file.path, name: file.name, type: 'hexa' };
+            document.getElementById('nim-file-dropzone').style.display = 'none';
+            const prev = document.getElementById('nim-file-preview');
+            prev.style.display = 'flex';
+            document.getElementById('nim-file-name').textContent = file.name;
+            document.getElementById('nim-file-type').textContent = 'Hexa Launcher Backup (.hexa)';
+        }
+
+        function nimHandleFileExt(file) {
+            const isMrpack = file.name.endsWith('.mrpack');
+            const isZip    = file.name.endsWith('.zip');
+            if (!isMrpack && !isZip) {
+                nimShowFileError('Unsupported format. Use .mrpack or .zip.');
+                return;
+            }
+            nimShowFileError('');
+            _nimFileData = { filePath: file.path, name: file.name, type: isMrpack ? 'mrpack' : 'zip' };
+            document.getElementById('nim-file-dropzone').style.display = 'none';
+            const prev = document.getElementById('nim-file-preview');
+            prev.style.display = 'flex';
+            document.getElementById('nim-file-name').textContent = file.name;
+            document.getElementById('nim-file-type').textContent = isMrpack ? 'Modrinth Pack (.mrpack)' : 'CurseForge Pack (.zip)';
+        }
+
+        function nimToggleCompat(btn) {
+            const panel = document.getElementById('nim-more-compat');
+            const chevron = document.getElementById('nim-compat-chevron');
+            const open = panel.style.display === 'flex';
+            panel.style.display = open ? 'none' : 'flex';
+            chevron.style.transform = open ? '' : 'rotate(90deg)';
+        }
+
+        async function nimScanLauncher(type, btn) {
+            // Update card states
+            document.querySelectorAll('.nim-launcher-card').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            _nimSelectedLauncherInst = null;
+            const state = document.getElementById('nim-launcher-state');
+            const loading = document.getElementById('nim-launcher-loading');
+            const errEl = document.getElementById('nim-launcher-err');
+            const list = document.getElementById('nim-launcher-list');
+            state.style.display = 'flex';
+            loading.style.display = 'block';
+            errEl.style.display = 'none';
+            list.innerHTML = '';
+
+            try {
+                const res = await window.electron.scanLauncherInstances({ launcher: type });
+                loading.style.display = 'none';
+                if (!res || !res.success) {
+                    errEl.textContent = res ? res.error : 'Scan failed.';
+                    errEl.style.display = 'block';
+                    return;
+                }
+                res.instances.forEach(inst => {
+                    const card = document.createElement('div');
+                    card.className = 'nim-inst-card';
+                    card.innerHTML = `
+                        ${inst.iconBase64 ? `<img src="${inst.iconBase64}" style="width:36px; height:36px; border-radius:6px; object-fit:cover; flex-shrink:0;">` : `<div style="width:36px; height:36px; border-radius:6px; background:#eee; flex-shrink:0; display:flex; align-items:center; justify-content:center;"><i class="fas fa-cube" style="color:#bbb; font-size:16px;"></i></div>`}
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-weight:700; font-size:13px; color:#111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${inst.name}</div>
+                            <div style="font-size:11px; color:#888; margin-top:2px;">${inst.version}${inst.loader && inst.loader !== 'vanilla' ? ' · ' + inst.loader : ''}</div>
+                        </div>
+                        <i class="fas fa-check nim-inst-check" style="color:#111; display:none; font-size:14px; flex-shrink:0;"></i>
+                    `;
+                    card.addEventListener('click', () => {
+                        list.querySelectorAll('.nim-inst-card').forEach(c => {
+                            c.classList.remove('selected');
+                            c.querySelector('.nim-inst-check').style.display = 'none';
+                        });
+                        card.classList.add('selected');
+                        card.querySelector('.nim-inst-check').style.display = 'block';
+                        _nimSelectedLauncherInst = inst;
+                    });
+                    list.appendChild(card);
+                });
+                if (res.instances.length === 0) {
+                    list.innerHTML = '<div style="padding:20px; text-align:center; color:#aaa; font-size:12px;">No instances found.</div>';
+                }
+            } catch(e) {
+                loading.style.display = 'none';
+                errEl.textContent = e.message;
+                errEl.style.display = 'block';
+            }
+        }
+
+        function nimClearFile() {
+            _nimFileData = null;
+            document.getElementById('nim-file-pick').value = '';
+            document.getElementById('nim-file-preview').style.display = 'none';
+            document.getElementById('nim-file-dropzone').style.display = 'block';
+            nimShowFileError('');
+        }
+
+        async function nimFetchModrinth() {
+            const raw = document.getElementById('nim-mr-url').value.trim();
+            if (!raw) return;
+            const fetchBtn = document.getElementById('nim-mr-fetch-btn');
+            fetchBtn.disabled = true;
+            fetchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Fetching…';
+            _nimMrProject = null;
+            document.getElementById('nim-mr-preview').style.display = 'none';
+            nimShowMrError('');
+
+            try {
+                // Extract slug from URL or use as-is
+                let slug = raw;
+                const m = raw.match(/modrinth\.com\/modpack\/([^/?#]+)/);
+                if (m) slug = m[1];
+
+                const res = await fetch(`https://api.modrinth.com/v2/project/${slug}`);
+                if (!res.ok) throw new Error('Project not found. Check your URL or slug.');
+                const project = await res.json();
+
+                if (project.project_type !== 'modpack') throw new Error('This is not a modpack. Only modpacks can be imported.');
+
+                // Get latest version info
+                const verRes = await fetch(`https://api.modrinth.com/v2/project/${slug}/version`);
+                const versions = await verRes.json();
+                const best = versions && versions[0];
+
+                _nimMrProject = { ...project, _bestVersion: best };
+
+                // Show preview
+                const preview = document.getElementById('nim-mr-preview');
+                document.getElementById('nim-mr-icon').src = project.icon_url || 'assets/logo.png';
+                document.getElementById('nim-mr-name').textContent = project.title;
+                const loaderTag = best && best.loaders ? best.loaders.join(' / ') : '';
+                const verTag    = best && best.game_versions ? best.game_versions[0] : '';
+                document.getElementById('nim-mr-meta').textContent = [verTag, loaderTag].filter(Boolean).join(' · ');
+                document.getElementById('nim-mr-desc').textContent = project.description || '';
+                preview.style.display = 'flex';
+            } catch(e) {
+                nimShowMrError(e.message);
+            }
+
+            fetchBtn.disabled = false;
+            fetchBtn.innerHTML = '<i class="fas fa-search"></i> Fetch';
+        }
+
+        function nimShowMrError(msg) {
+            const el = document.getElementById('nim-mr-error');
+            if (el) { el.textContent = msg; el.style.display = msg ? 'block' : 'none'; }
+        }
+        function nimShowFileError(msg) {
+            const el = document.getElementById('nim-file-error');
+            if (el) { el.textContent = msg; el.style.display = msg ? 'block' : 'none'; }
+        }
+    </script>
+    <button id="hidden-close" class="close-action-btn" style="display:none;"></button>
+
+    <!-- Gallery Lightbox -->
+    <div id="gallery-lightbox" class="modal-overlay" style="background: rgba(0,0,0,0.95); z-index: 40000;">
+        <img id="lightbox-img" style="max-width: 90%; max-height: 90vh;  box-shadow: 0 0 50px rgba(255,255,255,0.1);">
+        <button id="lightbox-close" class="close-action-btn" style="position: absolute; top: 30px; right: 30px;  font-size: 30px;">&times;</button>
+    </div>
+    
+
+    <!-- Progress Toast / Notification Container -->
+    <div id="progress-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 50000; display: flex; flex-direction: column-reverse; gap: 10px; pointer-events: none; width: 300px;">
+        <!-- Toasts will be injected here -->
+        <!-- Example:
+        <div class="progress-toast" style="background: #eeeeee;  padding: 15px;  width: 300px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); pointer-events: auto;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                <span style="font-weight:600; font-size:13px;">Installing Sodium...</span>
+                <span style="font-size:12px; color:#aaa;">45%</span>
+            </div>
+            <div style="width:100%; height:4px; background:#444;  overflow:hidden;">
+                <div style="width:45%; height:100%; background:var(--primary-pink);"></div>
+            </div>
+        </div>
+        -->
+    </div>
+
+    <script src="https://bs-community.github.io/skinview3d/js/skinview3d.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="renderer.js"></script>
+
+    <!-- WORLD EDITOR MODAL -->
+    <div id="world-editor-modal" style="display:none; position:fixed; inset:0; z-index: 40000; background:rgba(0,0,0,0.6); align-items:center; justify-content:center;" onclick="if(event.target===this) this.style.display='none'">
+        <div style="background:var(--card-bg); border-radius:16px; width:520px; max-width:95vw; overflow:hidden; box-shadow:var(--hover-shadow);">
+            
+            <!-- Header -->
+            <div style="display:flex; align-items:center; gap:16px; padding:20px 24px 16px; border-bottom:1px solid #f0f0f0;">
+                <img id="we-icon" src="assets/logo.png" style="width:64px; height:64px; border-radius:8px; object-fit:cover; image-rendering:pixelated; background:#ddd; border:2px solid #eee;">
+                <div style="flex:1; min-width:0;">
+                    <div style="font-size:13px; color:#999; font-weight:500; margin-bottom:2px;">World Settings</div>
+                    <div id="we-world-title" style="font-weight:800; font-size:18px; color:#111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">World</div>
+                </div>
+                <button onclick="document.getElementById('world-editor-modal').style.display='none'" style="background:none; border:none; cursor:pointer; font-size:18px; color:#aaa; width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:50%; transition:background 0.2s;" onmouseenter="this.style.background='#f0f0f0'" onmouseleave="this.style.background='none'">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div style="padding:24px; display:flex; flex-direction:column; gap:18px;">
+
+                <!-- Display name -->
+                <div>
+                    <label style="display:block; font-size:12px; font-weight:700; color:#555; margin-bottom:7px; text-transform:uppercase; letter-spacing:0.5px;">World Name</label>
+                    <input id="we-name" type="text" placeholder="World name…"
+                        style="width:100%; box-sizing:border-box; padding:10px 14px; border:1.5px solid #ddd; border-radius:8px; font-size:14px; color:#222; outline:none; transition:border 0.2s;"
+                        onfocus="this.style.borderColor='#333'" onblur="this.style.borderColor='#ddd'">
+                </div>
+
+                <!-- Game Mode + Difficulty side by side -->
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+                    <div>
+                        <label style="display:block; font-size:12px; font-weight:700; color:#555; margin-bottom:7px; text-transform:uppercase; letter-spacing:0.5px;">Game Mode</label>
+                        <select id="we-gamemode" style="width:100%; padding:10px 14px; border:1.5px solid var(--border-color); border-radius:8px; font-size:14px; color:var(--text-color); background:var(--card-bg); cursor:pointer; outline:none;">
+                            <option value="0">Survival</option>
+                            <option value="1">Creative</option>
+                            <option value="2">Adventure</option>
+                            <option value="3">Spectator</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:12px; font-weight:700; color:#555; margin-bottom:7px; text-transform:uppercase; letter-spacing:0.5px;">Difficulty</label>
+                        <select id="we-difficulty" style="width:100%; padding:10px 14px; border:1.5px solid var(--border-color); border-radius:8px; font-size:14px; color:var(--text-color); background:var(--card-bg); cursor:pointer; outline:none;">
+                            <option value="0">Peaceful</option>
+                            <option value="1">Easy</option>
+                            <option value="2">Normal</option>
+                            <option value="3">Hard</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Cheats toggle -->
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 16px; background:#f9f9f9; border-radius:10px;">
+                    <div>
+                        <div style="font-weight:700; font-size:14px; color:#222;">Cheats / Commands</div>
+                        <div style="font-size:12px; color:#888; margin-top:2px;">Allows /give, /tp, /gamemode and other commands in-game</div>
+                    </div>
+                    <label style="position:relative; display:inline-block; width:46px; height:26px; flex-shrink:0; margin-left:12px;">
+                        <input type="checkbox" id="we-cheats" style="opacity:0; width:0; height:0;">
+                        <span style="position:absolute; cursor:pointer; inset:0; background:#ccc; border-radius:26px; transition:0.2s;"
+                            id="we-cheats-track"
+                            onclick="const cb=document.getElementById('we-cheats'); cb.checked=!cb.checked; this.style.background=cb.checked?'#1a1a1a':'#ccc'; document.getElementById('we-cheats-thumb').style.left=cb.checked?'22px':'2px';"></span>
+                        <span id="we-cheats-thumb" style="position:absolute; height:22px; width:22px; left:2px; bottom:2px; background:white; border-radius:50%; transition:0.2s; pointer-events:none;"></span>
+                    </label>
+                </div>
+
+                <!-- Danger zone: reset toggle positions on open with JS -->
+
+            </div>
+
+            <!-- Footer -->
+            <div style="padding:16px 24px; border-top:1px solid #f0f0f0; display:flex; justify-content:flex-end; gap:10px;">
+                <button onclick="document.getElementById('world-editor-modal').style.display='none'"
+                    style="padding:10px 20px; border:1.5px solid #ddd; border-radius:8px; background:#fff; font-size:13px; font-weight:600; color:#555; cursor:pointer;">
+                    Cancel
+                </button>
+                <button id="we-save-btn" onclick="if(window.LibraryManager) window.LibraryManager.saveWorldSettings();"
+                    style="padding:10px 24px; border:none; border-radius:8px; background:#1a1a1a; color:#fff; font-size:13px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:8px; transition:opacity 0.2s;"
+                    onmouseenter="this.style.opacity='0.85'" onmouseleave="this.style.opacity='1'">
+                    <i class="fas fa-save"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- END WORLD EDITOR MODAL -->
+
+    <!-- PHOTO EDITOR MODAL -->
+    <div id="photo-editor-modal" style="display:none; position:fixed; inset:0; z-index: 40000; background:rgba(0,0,0,0.85); align-items:center; justify-content:center; flex-direction:column;">
+        <div style="background:var(--card-bg); border-radius:16px; width:90vw; max-width:1100px; max-height:92vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:var(--hover-shadow);">
+            
+            <!-- Header -->
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid #eee; flex-shrink:0;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <i class="fas fa-image" style="font-size:18px; color:#555;"></i>
+                    <span style="font-weight:700; font-size:15px; color:#222;" id="pe-filename">screenshot.png</span>
+                </div>
+                <button onclick="document.getElementById('photo-editor-modal').style.display='none'" style="background:none; border:none; cursor:pointer; font-size:20px; color:#888; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; transition:background 0.2s;" onmouseenter="this.style.background='#f0f0f0'" onmouseleave="this.style.background='none'">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div style="display:flex; flex:1; overflow:hidden; min-height:0;">
+                
+                <!-- Canvas Area -->
+                <div style="flex:1; display:flex; align-items:center; justify-content:center; background: repeating-conic-gradient(#e8e8e8 0% 25%, #f5f5f5 0% 50%) 0 0 / 20px 20px; overflow:hidden; padding:20px;">
+                    <canvas id="pe-canvas" style="max-width:100%; max-height:100%; object-fit:contain; border-radius:4px; display:block; box-shadow: 0 4px 20px rgba(0,0,0,0.15);"></canvas>
+                </div>
+
+                <!-- Controls Panel -->
+                <div style="width:260px; flex-shrink:0; border-left:1px solid #eee; padding:20px; overflow-y:auto; display:flex; flex-direction:column; gap:20px;">
                     
-                    <div class="input-group">
-                        <label>Arguments Java (Override)</label>
-                        <input type="text" placeholder="Hérite du global..." style="width:100%; padding:10px; background:#111; border:1px solid #333; color:white; border-radius:4px;">
+                    <!-- Adjustments -->
+                    <div>
+                        <div style="font-weight:700; font-size:13px; color:#333; margin-bottom:14px; text-transform:uppercase; letter-spacing:0.5px;">Adjustments</div>
+                        
+                        <div style="margin-bottom:16px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                                <label style="font-size:13px; color:#555; font-weight:500;"><i class="fas fa-sun" style="width:16px; color:#888;"></i> Brightness</label>
+                                <span id="pe-brightness-val" style="font-size:12px; color:#888; font-weight:600;">100%</span>
+                            </div>
+                            <input type="range" id="pe-brightness" min="0" max="300" value="100" style="width:100%; accent-color:#333;"
+                                oninput="document.getElementById('pe-brightness-val').textContent=this.value+'%'; if(window.LibraryManager) window.LibraryManager.applyPhotoFilters();">
+                        </div>
+
+                        <div style="margin-bottom:16px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                                <label style="font-size:13px; color:#555; font-weight:500;"><i class="fas fa-adjust" style="width:16px; color:#888;"></i> Contrast</label>
+                                <span id="pe-contrast-val" style="font-size:12px; color:#888; font-weight:600;">100%</span>
+                            </div>
+                            <input type="range" id="pe-contrast" min="0" max="300" value="100" style="width:100%; accent-color:#333;"
+                                oninput="document.getElementById('pe-contrast-val').textContent=this.value+'%'; if(window.LibraryManager) window.LibraryManager.applyPhotoFilters();">
+                        </div>
+
+                        <div style="margin-bottom:16px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                                <label style="font-size:13px; color:#555; font-weight:500;"><i class="fas fa-palette" style="width:16px; color:#888;"></i> Saturation</label>
+                                <span id="pe-saturation-val" style="font-size:12px; color:#888; font-weight:600;">100%</span>
+                            </div>
+                            <input type="range" id="pe-saturation" min="0" max="300" value="100" style="width:100%; accent-color:#333;"
+                                oninput="document.getElementById('pe-saturation-val').textContent=this.value+'%'; if(window.LibraryManager) window.LibraryManager.applyPhotoFilters();">
+                        </div>
+
+                        <button onclick="document.getElementById('pe-brightness').value=100; document.getElementById('pe-contrast').value=100; document.getElementById('pe-saturation').value=100; document.getElementById('pe-brightness-val').textContent='100%'; document.getElementById('pe-contrast-val').textContent='100%'; document.getElementById('pe-saturation-val').textContent='100%'; if(window.LibraryManager) window.LibraryManager.applyPhotoFilters();"
+                            style="width:100%; padding:7px; border:1px solid #ddd; border-radius:6px; background:#f8f8f8; font-size:12px; cursor:pointer; color:#555;">
+                            <i class="fas fa-undo"></i> Reset
+                        </button>
+                    </div>
+
+                    <!-- Divider -->
+                    <hr style="border:none; border-top:1px solid #eee; margin:0;">
+
+                    <!-- Actions -->
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <div style="font-weight:700; font-size:13px; color:#333; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">Actions</div>
+                        <button id="pe-save-btn" onclick="if(window.LibraryManager) window.LibraryManager.saveEditedPhoto();"
+                            style="width:100%; padding:10px; border:none; border-radius:8px; background:#222; color:#fff; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:opacity 0.2s;"
+                            onmouseenter="this.style.opacity='0.85'" onmouseleave="this.style.opacity='1'">
+                            <i class="fas fa-save"></i> Save
+                        </button>
+                        <button onclick="if(window.LibraryManager) window.LibraryManager.deleteCurrentPhoto();"
+                            style="width:100%; padding:10px; border:1px solid #fcc; border-radius:8px; background:#fff5f5; color:#c00; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:background 0.2s;"
+                            onmouseenter="this.style.background='#ffe5e5'" onmouseleave="this.style.background='#fff5f5'">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    <!-- END PHOTO EDITOR MODAL -->
 
-    <script src="renderer.js"></script>
-    <script src="https://bs-community.github.io/skinview3d/js/skinview3d.bundle.js" defer></script>
+    <!-- DELETE CONFIRMATION MODAL -->
+    <div id="delete-confirm-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2>CONFIRM DELETION</h2>
+                <button class="close-modal" onclick="document.getElementById('delete-confirm-modal').classList.remove('open')">&times;</button>
+            </div>
+            <div class="modal-content" style="padding: 0;">
+                <p style="margin-bottom: 20px; color: #555;">Are you sure you want to delete this instance? This action cannot be undone.</p>
+                <div class="modal-actions">
+                    <button class="secondary-btn" onclick="document.getElementById('delete-confirm-modal').classList.remove('open')">CANCEL</button>
+                    <button class="cta-btn" id="confirm-delete-btn" style="background: #e74c3c;">DELETE PERMANENTLY</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Auto Hide Attachment Menu
+    const menus = document.querySelectorAll('.attachment-menu, .emoji-picker-win');
+    menus.forEach(m => m.style.display = 'none');
+    // Init Friends
+    if(window.electron && window.electron.getFriends) {
+        window.electron.getFriends().catch(e => console.error('Friends init error', e));
+    }
+});
+</script>
