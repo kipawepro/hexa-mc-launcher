@@ -1,3 +1,7 @@
 /node_modules
 /dist
 RELEASE_NOTES_DRAFT.md
+/.claude
+server_social/config.php
+server_social/get_db_config.php
+/server_social
