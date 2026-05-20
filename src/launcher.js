@@ -1,557 +1,576 @@
 const { Client } = require('minecraft-launcher-core');
-const path = require('path');
-const fs = require('fs').promises;
-const fsOriginal = require('fs');
-const fetch = require('node-fetch');
-const AdmZip = require('adm-zip');
+const { exec }   = require('child_process');
+const path       = require('path');
+const fs         = require('fs').promises;
+const fetch      = require('node-fetch');
+const AdmZip     = require('adm-zip');
 
 const launcher = new Client();
 
-async function launch(options, config, user, mainWindow) {
-    console.log('[Launcher] Starting Launch Sequence...');
-    if (mainWindow) mainWindow.webContents.send('log', 'Séquence de lancement initialisée...');
+const REPOS = {
+    NEO:   'https://maven.neoforged.net/releases/',
+    FORGE: 'https://maven.minecraftforge.net/',
+};
 
-    const rootPath = options.root;
-    const gameDirectory = options.gameDirectory || rootPath; // Default to root if not specified
+// ─── LAUNCH ──────────────────────────────────────────────────────────────────
+
+async function launch(options, config, mainWindow) {
+    const log = msg => { console.log(msg); mainWindow?.webContents.send('log', msg); };
+    const sessionStart = Date.now();
+    log('Séquence de lancement initialisée...');
+
+    const rootPath    = options.root;
+    const gameDir     = options.gameDirectory || rootPath;
     const gameVersion = options.version.number;
-    const loaderConfig = options.loader;
+    const loaderCfg   = options.loader;
 
-    // Base MCLC Options
+    await fs.mkdir(gameDir, { recursive: true });
+
     const opts = {
-        authorization: options.authorization,
-        root: rootPath,
-        version: {
-            number: gameVersion,
-            type: "release"
-        },
-        memory: {
-            max: config.maxRam,
-            min: config.minRam
-        },
-        javaPath: options.javaPath,
-        customArgs: options.customArgs || [],
-        checkFiles: true,  // Fix: Force check files to ensure vanilla jar is present
+        authorization:      options.authorization,
+        root:               rootPath,
+        version:            { number: gameVersion, type: 'release' },
+        memory:             { max: config.maxRam, min: config.minRam },
+        javaPath:           options.javaPath,
+        customArgs:         [...(options.customArgs || [])],
+        checkFiles:         false,
         ignoreMissingAssets: false,
         overrides: {
-            gameDirectory: gameDirectory, // Set game directory explicitly
-            assetRoot: path.join(rootPath, 'assets'),
-            libraryRoot: path.join(rootPath, 'libraries') 
+            gameDirectory: gameDir,
+            cwd:           gameDir,
+            assetRoot:     path.join(rootPath, 'assets'),
+            libraryRoot:   path.join(rootPath, 'libraries'),
         },
         window: {
-            width: config.resolution ? config.resolution.width : 1280,
-            height: config.resolution ? config.resolution.height : 720,
-            fullscreen: config.fullscreen
-        }
+            width:      config.resolution?.width  ?? 1280,
+            height:     config.resolution?.height ?? 720,
+            fullscreen: config.fullscreen ?? false,
+        },
     };
 
-    // Make sure the directory structure exists
-    await fs.mkdir(rootPath, { recursive: true });
     await fs.mkdir(path.join(rootPath, 'versions'), { recursive: true });
 
-    // Handle Loaders
-    if (loaderConfig && loaderConfig.type !== 'vanilla') {
-        try {
-            console.log(`[Launcher] Preparing ${loaderConfig.type} version ${loaderConfig.version}...`);
-            if (mainWindow) mainWindow.webContents.send('log', `Préparation ${loaderConfig.type} (${loaderConfig.version})...`);
-            
-            const loaderVersionId = await prepareLoader(rootPath, gameVersion, loaderConfig, mainWindow, opts.javaPath);
-            
-            // CRITICAL FIX: Override version number and type for custom loaders
-            opts.version.number = gameVersion; // Must be vanilla base version
-            opts.version.custom = loaderVersionId; // MCLC treats string 'custom' as a version ID to look up in versions/ folder
-            
-            // Ensure JVM Args for Forge/NeoForge
-            if (loaderConfig.type === 'forge' || loaderConfig.type === 'neoforge') {
-                const isModernNeo = (loaderConfig.type === 'neoforge' && (gameVersion === '1.20.6' || gameVersion === '1.21' || gameVersion === '1.21.1'));
-                
-                if (!isModernNeo) {
-                    // Determine installer path for wrapper args
-                    const installerName = `${loaderConfig.type}-${loaderConfig.version}-installer.jar`;
-                    const installerPath = path.join(rootPath, 'installers', installerName);
-                    const vanillaJar = path.join(rootPath, 'versions', gameVersion, `${gameVersion}.jar`);
-                    
-                    // Add ForgeWrapper arguments
-                    opts.customArgs.push(`-Dforgewrapper.librariesDir=${options.libraryRoot}`);
-                    opts.customArgs.push(`-Dforgewrapper.installer=${installerPath}`);
-                    opts.customArgs.push(`-Dforgewrapper.minecraft=${vanillaJar}`);
-                } else {
-                    console.log("[Launcher] Modern NeoForge (1.20.6+) detected in Launch options. Skipping ForgeWrapper arguments.");
-                }
-            }
+    if (loaderCfg?.type && loaderCfg.type !== 'vanilla') {
+        const { versionId, jvmArgs } = await prepareLoader(rootPath, gameVersion, loaderCfg, mainWindow, opts.javaPath);
+        opts.version.custom = versionId;
+        if (jvmArgs?.length) opts.customArgs.push(...jvmArgs);
 
-        } catch (error) {
-            console.error(`[Launcher] Loader preparation failed:`, error);
-            if (mainWindow) mainWindow.webContents.send('log', `Erreur Loader: ${error.message}`);
-            throw error;
+        if (loaderCfg.type === 'neoforge') {
+            if (!opts.customArgs.includes('--enable-native-access=ALL-UNNAMED')) {
+                opts.customArgs.push('--enable-native-access=ALL-UNNAMED');
+            }
+        } else if (loaderCfg.type === 'forge') {
+            const installerPath = path.join(rootPath, 'installers', `forge-${loaderCfg.version}-installer.jar`);
+            const vanillaJar    = path.join(rootPath, 'versions', gameVersion, `${gameVersion}.jar`);
+            opts.customArgs.push(
+                `-Dforgewrapper.librariesDir=${path.join(rootPath, 'libraries')}`,
+                `-Dforgewrapper.installer=${installerPath}`,
+                `-Dforgewrapper.minecraft=${vanillaJar}`,
+            );
         }
     }
 
-    // Attach Event Listeners
-    // DEBUG logs are often verbose or duplicates of data in some MCLC versions, so we only log to console
-    launcher.on('debug', (e) => {
-        // if (mainWindow) mainWindow.webContents.send('log', `[DEBUG] ${e}`);
-        console.log(`[DEBUG] ${e}`);
-    });
-    
-    launcher.on('data', (e) => {
-        if (mainWindow) mainWindow.webContents.send('log', `[GAME] ${e}`);
-        console.log(`[GAME] ${e}`);
-    });
-    launcher.on('progress', (e) => {
-        if (mainWindow) mainWindow.webContents.send('process-progress', { type: e.type, current: e.task, total: e.total });
-    });
-    launcher.on('close', (e) => {
-        console.log('[Launcher] Game closed, code:', e);
-        if (mainWindow) mainWindow.webContents.send('log', `Jeu fermé (Code ${e})`);
-        if (mainWindow) mainWindow.webContents.send('stop-loading');
-        if (mainWindow) mainWindow.webContents.send('game-exit', e); // Reset play button in renderer
-        if (mainWindow) mainWindow.show();
+    launcher.removeAllListeners('debug');
+    launcher.removeAllListeners('data');
+    launcher.removeAllListeners('progress');
+    launcher.removeAllListeners('close');
+    launcher.on('debug',    e => console.log(`[DEBUG] ${e}`));
+    launcher.on('data',     e => log(`[GAME] ${e}`));
+    launcher.on('progress', e => mainWindow?.webContents.send('process-progress', { type: e.type, current: e.task, total: e.total }));
+    launcher.on('close',    async code => {
+        console.log('[Launcher] Game closed, code:', code);
+
+        // ── Report playtime ──────────────────────────────────────────────────
+        const minutes = Math.floor((Date.now() - sessionStart) / 60000);
+        if (minutes > 0 && options.accessToken) {
+            try {
+                const body = { minutes };
+                if (options.instanceFolder) body.instanceFolder = options.instanceFolder;
+                await fetch('https://hexa-mc.fr/hexa/api/profile/playtime', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${options.accessToken}` },
+                    body:    JSON.stringify(body),
+                });
+                console.log(`[Playtime] +${minutes} min reported (instance: ${options.instanceFolder || 'global only'})`);
+                if (options.instanceFolder) {
+                    mainWindow?.webContents.send('instance-playtime-refresh', options.instanceFolder);
+                }
+            } catch (e) {
+                console.warn('[Playtime] Failed to report:', e.message);
+            }
+        }
+
+        if (mainWindow) {
+            mainWindow.webContents.send('log', `Jeu fermé (Code ${code})`);
+            mainWindow.webContents.send('stop-loading');
+            mainWindow.webContents.send('game-exit', code);
+            mainWindow.show();
+        }
     });
 
-    // Integrity Checks
-    if (mainWindow) mainWindow.webContents.send('log', 'Vérification des fichiers...');
+    log('Vérification des fichiers...');
     await Promise.all([
-        removeZeroByteFiles(options.libraryRoot),
-        removeZeroByteFiles(path.join(rootPath, 'versions'))
+        removeZeroByteFiles(path.join(rootPath, 'libraries')),
+        removeZeroByteFiles(path.join(rootPath, 'versions')),
     ]);
-    await enforceAntiCheat(rootPath, mainWindow);
+    await enforceAntiCheat(gameDir, mainWindow);
 
-    console.log('[Launcher] Launching with options:', JSON.stringify(opts, null, 2));
-    if (mainWindow) mainWindow.webContents.send('log', 'Lancement de MCLC...');
-    
+    console.log('[Launcher] Launch opts:', JSON.stringify(opts, null, 2));
+    log('Lancement de MCLC...');
     await launcher.launch(opts);
 }
 
-async function prepareLoader(rootPath, gameVersion, loaderConfig, mainWindow, javaPath) {
-    const type = loaderConfig.type;
-    const version = loaderConfig.version;
-    const fullVersionName = `${gameVersion}-${version}`;
-    const versionId = `${type}-${fullVersionName}`; // e.g. neoforge-1.21.1-21.1.42
+// ─── PREPARE LOADER ──────────────────────────────────────────────────────────
 
-    // 1. Ensure Vanilla base exists
-    await ensureVanilla(rootPath, gameVersion, mainWindow);
+async function prepareLoader(rootPath, gameVersion, loaderCfg, mainWindow, javaPath, onProgress) {
+    const log = msg => { console.log(msg); mainWindow?.webContents.send('log', msg); };
+    const { type, version } = loaderCfg;
+    const versionId       = `${type}-${gameVersion}-${version}`;
+    const versionJsonPath = path.join(rootPath, 'versions', versionId, `${versionId}.json`);
 
-    // 2. Handle Specific Loaders
-    if (type === 'fabric') {
-        const fabricUrl = `https://meta.fabricmc.net/v2/versions/loader/${gameVersion}/${version}/profile/json`;
-        await installFabric(rootPath, versionId, fabricUrl, gameVersion, mainWindow);
-    } 
-    else if (type === 'quilt') {
-        const quiltUrl = `https://meta.quiltmc.org/v3/versions/loader/${gameVersion}/${version}/profile/json`;
-        await installQuilt(rootPath, versionId, quiltUrl, mainWindow);
+    if (await exists(versionJsonPath)) {
+        try {
+            const json = JSON.parse(await fs.readFile(versionJsonPath, 'utf8'));
+            if (!hasUnresolvedTemplates(json)) {
+                console.log(`[Launcher] ${type} ${version} already installed, skipping.`);
+                onProgress?.(100, `${type} ${version} déjà installé`);
+                return { versionId, jvmArgs: await loadCachedJvmArgs(versionJsonPath) };
+            }
+            console.log(`[Launcher] ${type} ${version}: unresolved templates detected, reinstalling...`);
+        } catch {
+            console.warn(`[Launcher] Corrupt JSON for ${versionId}, reinstalling...`);
+        }
+        await fs.rm(path.join(rootPath, 'versions', versionId), { recursive: true, force: true });
     }
-    else if (type === 'forge' || type === 'neoforge') {
-        const _javaPath = javaPath || 'java';
-        await installForgeNeo(rootPath, type, version, gameVersion, versionId, mainWindow, _javaPath);
+
+    log(`Installation ${type} ${version} pour MC ${gameVersion}...`);
+    await ensureVanilla(rootPath, gameVersion, mainWindow, onProgress);
+
+    let jvmArgs = [];
+    switch (type) {
+        case 'fabric': {
+            const url = `https://meta.fabricmc.net/v2/versions/loader/${gameVersion}/${version}/profile/json`;
+            await installMetaLoader(rootPath, versionId, url, 'Fabric', mainWindow, onProgress);
+            break;
+        }
+        case 'quilt': {
+            const url = `https://meta.quiltmc.org/v3/versions/loader/${gameVersion}/${version}/profile/json`;
+            await installMetaLoader(rootPath, versionId, url, 'Quilt', mainWindow, onProgress);
+            break;
+        }
+        case 'forge':
+        case 'neoforge':
+            jvmArgs = await installForgeNeo(rootPath, type, version, gameVersion, versionId, mainWindow, javaPath || 'java', onProgress);
+            break;
+        default:
+            throw new Error(`Loader inconnu: ${type}`);
     }
 
-    return versionId;
+    log(`${type} ${version} installé.`);
+    return { versionId, jvmArgs };
 }
 
-async function ensureVanilla(rootPath, gameVersion, mainWindow) {
+// ─── VANILLA ─────────────────────────────────────────────────────────────────
+
+// onProgress(percent, label) — called throughout download, 0-100 relative to vanilla phase
+async function ensureVanilla(rootPath, gameVersion, mainWindow, onProgress) {
+    const log  = msg => { console.log(msg); mainWindow?.webContents.send('log', msg); };
+    const prog = (pct, label) => { log(label); onProgress?.(pct, label); };
+
     const versionDir = path.join(rootPath, 'versions', gameVersion);
-    const versionJsonPath = path.join(versionDir, `${gameVersion}.json`);
-    
-    try {
-        await fs.access(versionJsonPath);
-    } catch {
-        if (mainWindow) mainWindow.webContents.send('log', `Téléchargement Vanilla ${gameVersion}...`);
-        const manifestRes = await fetch('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json');
-        const manifest = await manifestRes.json();
-        const v = manifest.versions.find(x => x.id === gameVersion);
-        if (!v) throw new Error(`Vanilla version ${gameVersion} not found.`);
-        
-        const vRes = await fetch(v.url);
-        const vJson = await vRes.json();
-        
+    const jsonPath   = path.join(versionDir, `${gameVersion}.json`);
+    const jarPath    = path.join(versionDir, `${gameVersion}.jar`);
+
+    prog(0, `Vanilla ${gameVersion} — vérification...`);
+
+    let versionJson;
+    if (!await exists(jsonPath)) {
+        prog(5, `Téléchargement manifest Vanilla...`);
+        const manifest = await fetchJson('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json');
+        const entry    = manifest.versions.find(v => v.id === gameVersion);
+        if (!entry) throw new Error(`Version Vanilla ${gameVersion} introuvable dans le manifest`);
+        prog(10, `Téléchargement JSON Vanilla ${gameVersion}...`);
+        versionJson = await fetchJson(entry.url);
         await fs.mkdir(versionDir, { recursive: true });
-        await fs.writeFile(versionJsonPath, JSON.stringify(vJson, null, 4));
-    }
-}
-
-async function installFabric(rootPath, versionId, url, gameVersion, mainWindow) {
-    const versionDir = path.join(rootPath, 'versions', versionId);
-    await fs.mkdir(versionDir, { recursive: true });
-    const jsonPath = path.join(versionDir, `${versionId}.json`);
-
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Fabric meta fetch failed: ${res.status}`);
-    const json = await res.json();
-    
-    // Patch ID matches folder
-    json.id = versionId;
-    // Don't modify inheritsFrom unless necessary, MCLC handles inheritance recursively if configured
-    // But usually saving it as is works if vanilla exists.
-    
-    await fs.writeFile(jsonPath, JSON.stringify(json, null, 4));
-}
-
-async function installQuilt(rootPath, versionId, url, mainWindow) {
-    const versionDir = path.join(rootPath, 'versions', versionId);
-    await fs.mkdir(versionDir, { recursive: true });
-    const jsonPath = path.join(versionDir, `${versionId}.json`);
-
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Quilt meta fetch failed: ${res.status}`);
-    const json = await res.json();
-    json.id = versionId;
-
-    await fs.writeFile(jsonPath, JSON.stringify(json, null, 4));
-}
-
-const { exec } = require('child_process');
-
-async function installForgeNeo(rootPath, type, modLoaderVersion, gameVersion, versionId, mainWindow, javaPath) {
-    // URL Construction
-    const isNeo = (type === 'neoforge');
-    let installerUrl;
-    if (isNeo) {
-        installerUrl = `https://maven.neoforged.net/releases/net/neoforged/neoforge/${modLoaderVersion}/neoforge-${modLoaderVersion}-installer.jar`;
+        await fs.writeFile(jsonPath, JSON.stringify(versionJson, null, 4));
     } else {
-        // Forge naming convention: GAME-LOADER
-        const longVersion = `${gameVersion}-${modLoaderVersion}`;
-        installerUrl = `https://maven.minecraftforge.net/net/minecraftforge/forge/${longVersion}/forge-${longVersion}-installer.jar`;
+        versionJson = JSON.parse(await fs.readFile(jsonPath, 'utf8'));
     }
+
+    if (!await exists(jarPath)) {
+        prog(15, `Téléchargement client.jar Vanilla ${gameVersion}...`);
+        await downloadFile(versionJson.downloads.client.url, jarPath);
+    }
+
+    // Download only missing vanilla libraries with per-file progress
+    const missing = (versionJson.libraries || [])
+        .filter(lib => lib.downloads?.artifact)
+        .map(lib => ({
+            dest: path.join(rootPath, 'libraries', ...lib.downloads.artifact.path.split('/')),
+            url:  lib.downloads.artifact.url,
+        }))
+        .filter(({ dest }) => !existsSync(dest));
+
+    if (missing.length) {
+        prog(20, `Téléchargement de ${missing.length} librairie(s) Vanilla...`);
+        for (let i = 0; i < missing.length; i++) {
+            await downloadFile(missing[i].url, missing[i].dest);
+            // 20% → 60% over libraries
+            const pct = 20 + Math.round((i + 1) / missing.length * 40);
+            onProgress?.(pct, `Librairies Vanilla (${i + 1}/${missing.length})`);
+        }
+    }
+
+    prog(60, `Vanilla ${gameVersion} — OK`);
+}
+
+// ─── FABRIC / QUILT ──────────────────────────────────────────────────────────
+
+async function installMetaLoader(rootPath, versionId, url, name, mainWindow, onProgress) {
+    onProgress?.(65, `Téléchargement profil ${name}...`);
+    mainWindow?.webContents.send('log', `Téléchargement profil ${name}...`);
+    const versionDir = path.join(rootPath, 'versions', versionId);
+    await fs.mkdir(versionDir, { recursive: true });
+    const json = await fetchJson(url);
+    json.id = versionId;
+    await fs.writeFile(path.join(versionDir, `${versionId}.json`), JSON.stringify(json, null, 4));
+    onProgress?.(100, `${name} installé !`);
+}
+
+// ─── FORGE / NEOFORGE ────────────────────────────────────────────────────────
+
+async function installForgeNeo(rootPath, type, modLoaderVersion, gameVersion, versionId, mainWindow, javaPath, onProgress) {
+    const log  = msg => { console.log(msg); mainWindow?.webContents.send('log', msg); };
+    const prog = (pct, label) => { log(label); onProgress?.(pct, label); };
+    const isNeo = type === 'neoforge';
+
+    const installerUrl = isNeo
+        ? `${REPOS.NEO}net/neoforged/neoforge/${modLoaderVersion}/neoforge-${modLoaderVersion}-installer.jar`
+        : `${REPOS.FORGE}net/minecraftforge/forge/${gameVersion}-${modLoaderVersion}/forge-${gameVersion}-${modLoaderVersion}-installer.jar`;
 
     const installerPath = path.join(rootPath, 'installers', `${type}-${modLoaderVersion}-installer.jar`);
     await fs.mkdir(path.dirname(installerPath), { recursive: true });
 
-    // Download Installer
-    try {
-        await fs.access(installerPath);
-    } catch {
-        if (mainWindow) mainWindow.webContents.send('log', `Téléchargement installer ${type}...`);
-        const res = await fetch(installerUrl);
-        if (!res.ok) throw new Error(`Installer download failed: ${res.status}`);
-        const buffer = await res.buffer();
-        await fs.writeFile(installerPath, buffer);
+    if (!await exists(installerPath)) {
+        prog(62, `Téléchargement installer ${type} ${modLoaderVersion}...`);
+        await downloadFile(installerUrl, installerPath);
     }
 
-    // MANUAL INSTALLER EXECUTION CHECK (NeoForge 1.20.6+)
-    if (isNeo && (gameVersion === '1.20.6' || gameVersion === '1.21' || gameVersion === '1.21.1')) {
-        // Construct the full path to the patched client jar, based on NeoForge layout
-        // libraries/net/neoforged/neoforge/VERSION/neoforge-VERSION-client.jar
-        const clientJarPath = path.join(rootPath, 'libraries', 'net', 'neoforged', 'neoforge', modLoaderVersion, `neoforge-${modLoaderVersion}-client.jar`);
-        let missingPatched = true;
-        
-        try {
-            await fs.access(clientJarPath);
-            missingPatched = false;
-        } catch (e) {
-            console.log("[Launcher] Patched jar check failed (not found):", clientJarPath);
-        }
+    // NeoForge: run the installer to generate the patched client jar and resolve all deps.
+    // The output path changed between NeoForge versions:
+    //   26.x → libraries/net/neoforged/minecraft-client-patched/<ver>/minecraft-client-patched-<ver>.jar
+    //   21.x → libraries/net/neoforged/neoforge/<ver>/neoforge-<ver>-client.jar
+    if (isNeo) {
+        const candidateJars = [
+            path.join(rootPath, 'libraries', 'net', 'neoforged', 'minecraft-client-patched',
+                modLoaderVersion, `minecraft-client-patched-${modLoaderVersion}.jar`),
+            path.join(rootPath, 'libraries', 'net', 'neoforged', 'neoforge',
+                modLoaderVersion, `neoforge-${modLoaderVersion}-client.jar`),
+        ];
+        const alreadyInstalled = await Promise.any(
+            candidateJars.map(p => fs.access(p).then(() => true))
+        ).catch(() => false);
 
-        if (missingPatched) {
-            console.log("[Launcher] Patched client jar missing. Running installer manually...");
-            if (mainWindow) mainWindow.webContents.send('log', `Installation manuelle des bibliothèques NeoForge (Peut prendre du temps)...`);
-            
-            await new Promise((resolve) => {
-                // Ensure the path is correct for installer execution
-                const javaExec = javaPath ? `"${javaPath}"` : "java";
-                const cmd = `${javaExec} -jar "${installerPath}" --installClient "${rootPath}"`;
-                console.log("[Launcher] Executing Installer Command:", cmd);
-                
-                exec(cmd, { cwd: rootPath }, (error, stdout, stderr) => {
-                    if (error) {
-                         console.warn("[Launcher] Installer process returned error:", error);
-                    } else {
-                        console.log("[Launcher] Installer completed successfully.");
-                    }
-                    if (stderr) console.error("[Installer Log]", stderr);
-                    // console.log(stdout);
-                    resolve();
-                });
-            });
-        }
-    }
+        if (!alreadyInstalled) {
+            const profilesPath = path.join(rootPath, 'launcher_profiles.json');
+            if (!await exists(profilesPath)) {
+                await fs.writeFile(profilesPath, JSON.stringify({ profiles: {}, selectedProfile: null }));
+            }
+            prog(65, `Exécution installer NeoForge (peut prendre quelques minutes)...`);
+            await execAsync(`"${javaPath}" -jar "${installerPath}" --installClient "${rootPath}"`, rootPath);
 
-    // Extract version.json
-    if (mainWindow) mainWindow.webContents.send('log', `Extraction configuration ${type}...`);
-    const zip = new AdmZip(installerPath);
-    const versionEntry = zip.getEntry('version.json');
-    if (!versionEntry) throw new Error("version.json missing from installer");
-    
-    // Read and parse
-    let versionJson = JSON.parse(versionEntry.getData().toString('utf8'));
-    
-    // COPY INSTALLER TO LIBRARIES (Critical for MCLC Processors)
-    try {
-        // Construct standard maven path for the installer itself
-        // e.g. net/neoforged/neoforge/26.1.0/neoforge-26.1.0-installer.jar
-        const groupPath = isNeo ? 'net/neoforged/neoforge' : 'net/minecraftforge/forge';
-        const versionPath = isNeo ? modLoaderVersion : `${gameVersion}-${modLoaderVersion}`;
-        const artifactName = isNeo ? `neoforge-${versionPath}` : `forge-${versionPath}`;
-        
-        const relativePath = `${groupPath}/${versionPath}/${artifactName}-installer.jar`;
-        const destPath = path.join(rootPath, 'libraries', relativePath);
-        
-        await fs.mkdir(path.dirname(destPath), { recursive: true });
-        await fs.copyFile(installerPath, destPath);
-        
-        console.log(`[Launcher] Copied installer to library path: ${relativePath}`);
-        
-        // Ensure installer is in libraries list for MCLC to "see" it?
-        // Usually not needed if we put it in the right place, but good practice.
-    } catch(e) { console.error("[Launcher] Failed to copy installer to libs:", e); }
-
-    // PATCHING
-    versionJson.id = versionId;
-    versionJson.inheritsFrom = gameVersion; // Ensure inheritance is explicit
-
-    // ForgeWrapper Patch (Essential for MCLC < 3.0 or non-native execution)
-    const forgeWrapperVersion = "1.6.0";
-    const wrapperLib = {
-        name: `io.github.zekerzhayard:ForgeWrapper:${forgeWrapperVersion}`,
-        downloads: {
-            artifact: {
-                url: `https://github.com/ZekerZhayard/ForgeWrapper/releases/download/${forgeWrapperVersion}/ForgeWrapper-${forgeWrapperVersion}.jar`,
-                path: `io/github/zekerzhayard/ForgeWrapper/${forgeWrapperVersion}/ForgeWrapper-${forgeWrapperVersion}.jar`,
-                size: 34369 
+            const nowInstalled = await Promise.any(
+                candidateJars.map(p => fs.access(p).then(() => true))
+            ).catch(() => false);
+            if (!nowInstalled) {
+                throw new Error(
+                    `NeoForge: aucun jar patché trouvé après installation.\n` +
+                    `Chemins vérifiés:\n${candidateJars.join('\n')}\n` +
+                    `Vérifiez Java ${javaPath} et les droits d'écriture sur ${rootPath}`,
+                );
             }
         }
-    };
-
-
-    // CHECK NEOFORGE 1.20.6 / 1.21
-    const isModernNeo = isNeo && (gameVersion === '1.20.6' || gameVersion === '1.21' || gameVersion === '1.21.1');
-    if (isModernNeo) {
-        console.log("[Launcher] Modern NeoForge (1.20.6+) detected. SKIPPING ForgeWrapper injection.");
-        
-        // ENSURE Bootstraplauncher & SecureJarHandler are present
-        const hasBoot = versionJson.libraries.some(l => l.name.includes("bootstraplauncher"));
-        const hasSecure = versionJson.libraries.some(l => l.name.includes("securejarhandler"));
-        const hasModL = versionJson.libraries.some(l => l.name.includes("modlauncher"));
-
-        // If missing, inject defaults for 1.21
-        // (Using versions known to be stable with 1.21/21.1)
-        
-        if (!hasBoot) {
-            console.log("[Launcher] Injecting missing Bootstraplauncher...");
-            versionJson.libraries.push({
-                name: "cpw.mods:bootstraplauncher:2.0.2",
-                downloads: {
-                    artifact: {
-                        path: "cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar",
-                        url: "https://maven.neoforged.net/releases/cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar",
-                        size: 16187 // approximate
-                    }
-                }
-            });
-        }
-        
-        if (!hasSecure) {
-             console.log("[Launcher] Injecting missing SecureJarHandler...");
-            versionJson.libraries.push({
-                name: "cpw.mods:securejarhandler:3.0.8",
-                downloads: {
-                    artifact: {
-                        path: "cpw/mods/securejarhandler/3.0.8/securejarhandler-3.0.8.jar",
-                        url: "https://maven.neoforged.net/releases/cpw/mods/securejarhandler/3.0.8/securejarhandler-3.0.8.jar",
-                        size: 97893 
-                    }
-                }
-            });
-        }
-
-        // Ensure ARGUMENTS for BootstrapLauncher
-        if (!versionJson.arguments) versionJson.arguments = {};
-        // Ensure game arguments array exists (sometimes it's an object with 'game' and 'jvm')
-        if (!versionJson.arguments.game) versionJson.arguments.game = [];
-        
-        // Check if --installer is present
-        // arguments.game can be array of strings or objects (rules)
-        // We look for the string '--installer'
-        const hasInstallerArg = versionJson.arguments.game.some(a => typeof a === 'string' && a.includes('--installer'));
-        
-        if (!hasInstallerArg) {
-             console.log("[Launcher] Injecting missing --installer argument for NeoForge...");
-             
-             const iGroup = isNeo ? 'net/neoforged/neoforge' : 'net/minecraftforge/forge';
-             const iVersion = isNeo ? modLoaderVersion : `${gameVersion}-${modLoaderVersion}`;
-             const iName = isNeo ? `neoforge-${iVersion}` : `forge-${iVersion}`;
-             const iPath = `${iGroup}/${iVersion}/${iName}-installer.jar`;
-             
-             const absLibraryPath = path.join(rootPath, 'libraries', iPath).replace(/\\/g, '/');
-             
-             versionJson.arguments.game.push('--installer');
-             versionJson.arguments.game.push(absLibraryPath);
-        }
-
-    } else {
-        if (!versionJson.libraries.find(l => l.name.includes("ForgeWrapper"))) {
-            versionJson.libraries.push(wrapperLib);
-        }
-        // Override Main Class to Wrapper only for older Forge/Neo
-        versionJson.mainClass = "io.github.zekerzhayard.forgewrapper.installer.Main";
     }
 
-    // Library Patching Strategy
-    // We strictly define repositories
-    const REPOS = {
-        NEO: 'https://maven.neoforged.net/releases/',
-        FORGE: 'https://maven.minecraftforge.net/'
-    };
+    prog(85, `Configuration ${type}...`);
 
-    versionJson.libraries.forEach(lib => {
-        // Ensure structure
-        if (!lib.downloads) lib.downloads = {};
-        if (!lib.downloads.artifact) lib.downloads.artifact = {};
+    const libRelPath = isNeo
+        ? `net/neoforged/neoforge/${modLoaderVersion}/neoforge-${modLoaderVersion}-installer.jar`
+        : `net/minecraftforge/forge/${gameVersion}-${modLoaderVersion}/forge-${gameVersion}-${modLoaderVersion}-installer.jar`;
+    const libDest = path.join(rootPath, 'libraries', libRelPath);
+    await fs.mkdir(path.dirname(libDest), { recursive: true });
+    await fs.copyFile(installerPath, libDest).catch(() => {});
 
-        // Parse Artifact
-        const parts = lib.name.split(':'); // group:artifact:version
-        const group = parts[0];
-        const artifact = parts[1];
-        const version = parts[2];
-        const pathStr = `${group.replace(/\./g, '/')}/${artifact}/${version}/${artifact}-${version}.jar`;
+    let versionJson = null;
 
-        // If URL is missing, we must provide it
-        if (!lib.downloads.artifact.url) {
-            lib.downloads.artifact.path = pathStr;
-            
-            // Heuristic for Repository
-            let repoBase = REPOS.FORGE; // Default fall back to Forge Maven for non-central things
-            if (isNeo) {
-                // If NeoForge, prefer Neo Maven for known groups
-                if (group.startsWith('net.neoforged') || 
-                    group.startsWith('cpw.mods') || 
-                    group.startsWith('codechicken') // often on neo
-                   ) {
-                    repoBase = REPOS.NEO;
-                }
-            } 
-            
-            // Specific overrides
-            if (group.startsWith('org.ow2.asm')) repoBase = REPOS.FORGE; // ASM usually on Forge maven if not Central
-            if (group === 'com.electronwill.night-config') repoBase = REPOS.FORGE; // NightConfig
-
-            lib.downloads.artifact.url = `${repoBase}${pathStr}`;
+    if (isNeo) {
+        const neoId       = `neoforge-${modLoaderVersion}`;
+        const neoJsonPath = path.join(rootPath, 'versions', neoId, `${neoId}.json`);
+        if (await exists(neoJsonPath)) {
+            versionJson = JSON.parse(await fs.readFile(neoJsonPath, 'utf8'));
         }
+    }
 
-        // === CRITICAL FIXES FOR MODLAUNCHER ===
-        if (lib.name.includes("modlauncher")) {
-            // FORCE 10.0.9 for NeoForge 1.21 if not specified or weird
-            // But usually we respect version.
-            
-            // Force URL to be correct for the specific loader
-            // NeoForge MUST use Neo Maven for ModLauncher to get the right one
-            if (isNeo) {
-                lib.downloads.artifact.url = `${REPOS.NEO}cpw/mods/modlauncher/${version}/modlauncher-${version}.jar`;
-            } else {
-                lib.downloads.artifact.url = `${REPOS.FORGE}cpw/mods/modlauncher/${version}/modlauncher-${version}.jar`;
-            }
-            // Fix path to standard because sometimes it's weird
-            lib.downloads.artifact.path = `cpw/mods/modlauncher/${version}/modlauncher-${version}.jar`;
+    if (!versionJson) {
+        const zip   = new AdmZip(installerPath);
+        const entry = zip.getEntry('version.json');
+        if (!entry) throw new Error(`version.json manquant dans le ZIP de l'installer`);
+        versionJson = JSON.parse(entry.getData().toString('utf8'));
+    }
 
-            // Aggressive Cache Busting: Remove SHA1 to force MCLC to ignore local file if it mismatches logic (or is corrupt)
-            // But we must be careful: if we remove SHA1, MCLC might just download it blindly. 
-            // If the local file exists and is "valid" by size, MCLC might skip it.
-            // Earlier we implemented removeZeroByteFiles, so size 0 is gone.
-            // If we remove SHA1, MCLC cannot verify integrity, so it might re-download if it decides to.
-            if (lib.downloads.artifact.sha1) delete lib.downloads.artifact.sha1; 
-            
-            // Add a size check or placeholder to trick MCLC into thinking it MUST download?
-            // No, removing SHA1 is usually enough.
-            
-            // LOG for debug
-            console.log(`[Launcher] ModLauncher Target: ${lib.downloads.artifact.url}`);
-        }
-        
-        // === FORCE BOOTSTRAPLAUNCHER & SECUREJARHANDLER ===
-        if(isNeo && lib.name.includes("bootstraplauncher")) {
-             const v = lib.name.split(':')[2];
-             lib.downloads.artifact.url = `${REPOS.NEO}cpw/mods/bootstraplauncher/${v}/bootstraplauncher-${v}.jar`;
-             lib.downloads.artifact.path = `cpw/mods/bootstraplauncher/${v}/bootstraplauncher-${v}.jar`;
-             if (lib.downloads.artifact.sha1) delete lib.downloads.artifact.sha1;
-        }
-        if(isNeo && lib.name.includes("securejarhandler")) {
-             const v = lib.name.split(':')[2];
-             lib.downloads.artifact.url = `${REPOS.NEO}cpw/mods/securejarhandler/${v}/securejarhandler-${v}.jar`;
-             lib.downloads.artifact.path = `cpw/mods/securejarhandler/${v}/securejarhandler-${v}.jar`;
-             if (lib.downloads.artifact.sha1) delete lib.downloads.artifact.sha1;
-        }
+    versionJson.id           = versionId;
+    versionJson.inheritsFrom = gameVersion;
 
-        // === CRITICAL FIX FOR TERMINAL CONSOLE APPENDER ===
-        // Often causes issues on Windows 11 / Node environments
-        if (lib.name.includes("terminalconsoleappender")) {
-             if (lib.downloads.artifact.sha1) delete lib.downloads.artifact.sha1;
-             lib.downloads.artifact.url = `https://maven.minecraftforge.net/${pathStr}`;
-        }
+    const librariesDir = path.join(rootPath, 'libraries').replace(/\\/g, '/');
+    const sep = process.platform === 'win32' ? ';' : ':';
+    versionJson = resolveTemplates(versionJson, {
+        library_directory:    librariesDir,
+        libraries_directory:  librariesDir,
+        version_name:         versionId,
+        classpath_separator:  sep,
     });
 
-    // Clean potentially corrupt libraries
-    await removeZeroByteFiles(path.join(rootPath, 'libraries'));
-
-    // AGGRESSIVE FIX: Always delete ModLauncher to force fresh download and avoid corruption
-    // This is necessary because older corrupted files often don't trigger redownload if sha1 is missing
-    try {
-        const modLauncherPath = path.join(rootPath, 'libraries/cpw/mods/modlauncher');
-        if (require('fs').existsSync(modLauncherPath)) {
-            console.log("[Launcher] Nuking existing ModLauncher to ensure integrity...");
-            await fs.rm(modLauncherPath, { recursive: true, force: true });
+    if (!isNeo) {
+        const fwVer = '1.6.0';
+        if (!versionJson.libraries?.some(l => l.name.includes('ForgeWrapper'))) {
+            versionJson.libraries = versionJson.libraries || [];
+            versionJson.libraries.push({
+                name: `io.github.zekerzhayard:ForgeWrapper:${fwVer}`,
+                downloads: { artifact: {
+                    url:  `https://github.com/ZekerZhayard/ForgeWrapper/releases/download/${fwVer}/ForgeWrapper-${fwVer}.jar`,
+                    path: `io/github/zekerzhayard/ForgeWrapper/${fwVer}/ForgeWrapper-${fwVer}.jar`,
+                    size: 34369,
+                }},
+            });
         }
-    } catch(e) { console.error("[Launcher] Failed to clean ModLauncher:", e); }
-    
-    // Add ModLauncher MANUALLY if missing from json (happens with some neoforge installers)
-    const hasML = versionJson.libraries.some(l => l.name.includes("modlauncher"));
-    if (!hasML) {
-        console.warn("[Launcher] ModLauncher missing from version.json! Injecting fallback...");
-        // Default for 1.21 is 10.0.9+
-        const mlVersion = "10.0.9"; 
-        versionJson.libraries.push({
-            name: `cpw.mods:modlauncher:${mlVersion}`,
-            downloads: {
-                artifact: {
-                    path: `cpw/mods/modlauncher/${mlVersion}/modlauncher-${mlVersion}.jar`,
-                    url: `https://maven.neoforged.net/releases/cpw/mods/modlauncher/${mlVersion}/modlauncher-${mlVersion}.jar`,
-                    size: 130343
-                }
-            }
-        });
+        versionJson.mainClass = 'io.github.zekerzhayard.forgewrapper.installer.Main';
     }
 
-    // Save
+    versionJson.libraries = patchLibraries(versionJson.libraries || [], isNeo);
+
+    const manualJvmArgs = [];
+
+    if (Array.isArray(versionJson.arguments?.jvm)) {
+
+        // MCLC does not reliably forward any string args from custom version JSONs.
+        // Extract ALL of them (including -p, --add-modules, --add-opens, -D*, etc.)
+        // and pass via customArgs instead. Strip them from the JSON to prevent
+        // any partial/duplicate application by MCLC.
+        const jvmStrings = versionJson.arguments.jvm.filter(a => typeof a === 'string');
+        for (const arg of jvmStrings) manualJvmArgs.push(arg);
+
+        versionJson.arguments.jvm = versionJson.arguments.jvm.filter(a => typeof a !== 'string');
+    }
+
     const versionDir = path.join(rootPath, 'versions', versionId);
     await fs.mkdir(versionDir, { recursive: true });
     await fs.writeFile(path.join(versionDir, `${versionId}.json`), JSON.stringify(versionJson, null, 4));
+    await fs.writeFile(path.join(versionDir, `${versionId}.jvmargs.json`), JSON.stringify(manualJvmArgs));
+
+    prog(95, `Nettoyage des librairies...`);
+    await removeZeroByteFiles(path.join(rootPath, 'libraries'));
+    prog(100, `${type} ${modLoaderVersion} installé !`);
+    return manualJvmArgs;
 }
 
+// ─── LIBRARY PATCHER ─────────────────────────────────────────────────────────
 
-async function removeZeroByteFiles(dir) {
-    try {
-        const items = await fs.readdir(dir);
-        for (const item of items) {
-            const fullPath = path.join(dir, item);
-            try {
-                const stat = await fs.stat(fullPath);
-                if (stat.isDirectory()) {
-                    await removeZeroByteFiles(fullPath);
-                } else if (stat.isFile() && stat.size === 0) {
-                    await fs.unlink(fullPath);
-                }
-            } catch (e) {}
+function patchLibraries(libraries, isNeo) {
+    const repo = isNeo ? REPOS.NEO : REPOS.FORGE;
+
+    return libraries.map(lib => {
+        if (!lib.downloads)          lib = { ...lib, downloads: {} };
+        if (!lib.downloads.artifact) lib = { ...lib, downloads: { ...lib.downloads, artifact: {} } };
+
+        const art = { ...lib.downloads.artifact };
+        const [group, artifact, version] = lib.name.split(':');
+
+        if (!art.url) {
+            const mavenPath = `${group.replace(/\./g, '/')}/${artifact}/${version}/${artifact}-${version}.jar`;
+            const neoGroups = ['net.neoforged', 'cpw.mods', 'codechicken'];
+            art.path = mavenPath;
+            art.url  = (isNeo && neoGroups.some(g => group.startsWith(g)))
+                ? `${REPOS.NEO}${mavenPath}`
+                : `${REPOS.FORGE}${mavenPath}`;
         }
-    } catch (e) {}
+
+        // Fix known mis-resolved artifacts
+        if (artifact === 'modlauncher') {
+            art.url  = `${repo}cpw/mods/modlauncher/${version}/modlauncher-${version}.jar`;
+            art.path = `cpw/mods/modlauncher/${version}/modlauncher-${version}.jar`;
+            delete art.sha1;
+        }
+        if (isNeo && artifact === 'bootstraplauncher') {
+            art.url  = `${REPOS.NEO}cpw/mods/bootstraplauncher/${version}/bootstraplauncher-${version}.jar`;
+            art.path = `cpw/mods/bootstraplauncher/${version}/bootstraplauncher-${version}.jar`;
+            delete art.sha1;
+        }
+        if (isNeo && artifact === 'securejarhandler') {
+            art.url  = `${REPOS.NEO}cpw/mods/securejarhandler/${version}/securejarhandler-${version}.jar`;
+            art.path = `cpw/mods/securejarhandler/${version}/securejarhandler-${version}.jar`;
+            delete art.sha1;
+        }
+        if (artifact === 'terminalconsoleappender') {
+            const mavenPath = `${group.replace(/\./g, '/')}/${artifact}/${version}/${artifact}-${version}.jar`;
+            art.url = `${REPOS.FORGE}${mavenPath}`;
+            delete art.sha1;
+        }
+
+        return { ...lib, downloads: { ...lib.downloads, artifact: art } };
+    });
 }
 
-async function enforceAntiCheat(installPath, mainWindow) {
-    if (mainWindow) mainWindow.webContents.send('log', "Vérification intégrité...");
-    const forbiddenKeywords = ['xray', 'x-ray', 'killaura', 'aristois', 'wurst']; 
-    const scanDirs = ['mods', 'resourcepacks'];
-    
-    for (const d of scanDirs) {
-        const dirPath = path.join(installPath, d);
+// ─── ANTI-CHEAT ──────────────────────────────────────────────────────────────
+
+async function enforceAntiCheat(gameDir, mainWindow) {
+    mainWindow?.webContents.send('log', 'Vérification intégrité...');
+    const forbidden = ['xray', 'x-ray', 'killaura', 'aristois', 'wurst'];
+    for (const dir of ['mods', 'resourcepacks']) {
+        const dirPath = path.join(gameDir, dir);
         try {
-            await fs.access(dirPath);
-            const files = await fs.readdir(dirPath);
-            for (const file of files) {
-                if (forbiddenKeywords.some(k => file.toLowerCase().includes(k))) {
-                     console.warn(`[Anti-Cheat] Removed ${file}`);
-                     if (mainWindow) mainWindow.webContents.send('log', `Suppression: ${file}`);
-                     await fs.unlink(path.join(dirPath, file)).catch(()=>{});
+            for (const file of await fs.readdir(dirPath)) {
+                if (forbidden.some(k => file.toLowerCase().includes(k))) {
+                    await fs.unlink(path.join(dirPath, file)).catch(() => {});
+                    mainWindow?.webContents.send('log', `Suppression: ${file}`);
                 }
             }
-        } catch (e) {}
+        } catch { /* dir doesn't exist, skip */ }
     }
 }
 
-module.exports = { launch, launcher };
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+async function exists(p) {
+    return fs.access(p).then(() => true).catch(() => false);
+}
+
+function existsSync(p) {
+    return require('fs').existsSync(p);
+}
+
+async function fetchJson(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} — ${url}`);
+    return res.json();
+}
+
+async function downloadFile(url, dest) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} downloading ${url}`);
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.writeFile(dest, await res.buffer());
+}
+
+async function execAsync(cmd, cwd) {
+    return new Promise((resolve) => {
+        exec(cmd, { cwd, maxBuffer: 32 * 1024 * 1024 }, (err, stdout, stderr) => {
+            // Filter out the .class file listing spam the NeoForge installer prints
+            const clean = str => (str || '')
+                .split('\n')
+                .filter(l => !l.trim().match(/^\s*(net\/|com\/|org\/|META-INF\/).*\.class\s*$/))
+                .join('\n')
+                .trim();
+            const out = clean(stdout);
+            const err2 = clean(stderr);
+            if (out)  console.log('[Installer]', out);
+            if (err2) console.log('[Installer]', err2);
+            resolve({ stdout, stderr });
+        });
+    });
+}
+
+async function removeZeroByteFiles(dir) {
+    try {
+        for (const item of await fs.readdir(dir)) {
+            const p = path.join(dir, item);
+            try {
+                const stat = await fs.stat(p);
+                if (stat.isDirectory()) await removeZeroByteFiles(p);
+                else if (stat.size === 0) await fs.unlink(p);
+            } catch { /* ignore access errors */ }
+        }
+    } catch { /* dir doesn't exist */ }
+}
+
+// Load jvmArgs saved alongside the version JSON during installation.
+async function loadCachedJvmArgs(versionJsonPath) {
+    try {
+        return JSON.parse(await fs.readFile(versionJsonPath.replace(/\.json$/, '.jvmargs.json'), 'utf8'));
+    } catch { return []; }
+}
+
+// Check if any argument string still contains ${...} template placeholders we can't resolve locally
+// (${classpath_separator} is handled by extractStringJvmArgs, so don't flag it)
+function hasUnresolvedTemplates(versionJson) {
+    const check = a => typeof a === 'string' && /\$\{(?!classpath_separator)[^}]+\}/.test(a);
+    const jvm  = versionJson.arguments?.jvm  || [];
+    const game = versionJson.arguments?.game || [];
+    return [...jvm, ...game].some(check);
+}
+
+// Replace ${key} placeholders in all string arguments
+function resolveTemplates(versionJson, vars) {
+    const replace = str => {
+        if (typeof str !== 'string') return str;
+        return str.replace(/\$\{([^}]+)\}/g, (_, k) => vars[k] ?? `\${${k}}`);
+    };
+
+    const clone = JSON.parse(JSON.stringify(versionJson));
+    if (Array.isArray(clone.arguments?.jvm))  clone.arguments.jvm  = clone.arguments.jvm.map(replace);
+    if (Array.isArray(clone.arguments?.game)) clone.arguments.game = clone.arguments.game.map(replace);
+    return clone;
+}
+
+// ─── INSTALL INSTANCE (called at creation time, not at launch) ───────────────
+// onProgress({ phase, percent, label })
+//   phase: 'vanilla' | 'loader'
+//   percent: 0-100 within that phase
+async function installInstance({ gameVersion, loader, loaderVersion, rootPath, javaPath }, onProgress) {
+    const loaderType = loader && loader !== 'vanilla' ? loader.toLowerCase() : null;
+    const loaderCfg  = loaderType ? { type: loaderType, version: loaderVersion } : null;
+
+    const vanillaProg = (pct, label) => onProgress?.({ phase: 'vanilla', percent: pct, label });
+    const loaderProg  = (pct, label) => onProgress?.({ phase: 'loader',  percent: pct, label });
+
+    // Phase 1 — Vanilla
+    await ensureVanilla(rootPath, gameVersion, null, vanillaProg);
+    vanillaProg(100, `Minecraft ${gameVersion} prêt !`);
+
+    // Phase 2 — Modloader (if any)
+    if (loaderCfg) {
+        const versionId       = `${loaderType}-${gameVersion}-${loaderVersion}`;
+        const versionJsonPath = path.join(rootPath, 'versions', versionId, `${versionId}.json`);
+
+        if (await exists(versionJsonPath)) {
+            try {
+                const json = JSON.parse(await fs.readFile(versionJsonPath, 'utf8'));
+                if (!hasUnresolvedTemplates(json)) {
+                    loaderProg(100, `${loaderType} déjà installé`);
+                    return { versionId, jvmArgs: await loadCachedJvmArgs(versionJsonPath) };
+                }
+            } catch { /* corrupt, reinstall */ }
+            await fs.rm(path.join(rootPath, 'versions', versionId), { recursive: true, force: true });
+        }
+
+        switch (loaderType) {
+            case 'fabric': {
+                const url = `https://meta.fabricmc.net/v2/versions/loader/${gameVersion}/${loaderVersion}/profile/json`;
+                await installMetaLoader(rootPath, versionId, url, 'Fabric', null, loaderProg);
+                break;
+            }
+            case 'quilt': {
+                const url = `https://meta.quiltmc.org/v3/versions/loader/${gameVersion}/${loaderVersion}/profile/json`;
+                await installMetaLoader(rootPath, versionId, url, 'Quilt', null, loaderProg);
+                break;
+            }
+            case 'forge':
+            case 'neoforge':
+                await installForgeNeo(rootPath, loaderType, loaderVersion, gameVersion, versionId, null, javaPath || 'java', loaderProg);
+                break;
+            default:
+                throw new Error(`Loader inconnu: ${loaderType}`);
+        }
+    }
+}
+
+module.exports = { launch, launcher, installInstance };

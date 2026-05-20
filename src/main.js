@@ -1,6 +1,12 @@
 const nbt = require('prismarine-nbt');
 const zlib = require('zlib');
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog, shell } = require('electron');
+
+// TLS bypass only in dev (never in production)
+if (process.env.NODE_ENV === 'development') {
+    app.commandLine.appendSwitch('ignore-certificate-errors');
+    app.commandLine.appendSwitch('allow-insecure-localhost');
+}
 const path = require('path');
 const fs = require('fs').promises;
 const fsOriginal = require('fs');
@@ -9,27 +15,149 @@ const launcher = new Client();
 const msmc = require("msmc");
 const AdmZip = require('adm-zip');
 const fetch = require('node-fetch');
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
 const os = require('os');
 const crypto = require('crypto');
 const DiscordRPC = require('discord-rpc');
-const { autoUpdater } = require('electron-updater');
 const { launch } = require('./launcher');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
-const AUTH_API_URL = 'https://hgstudio.strator.gg/auth_api.php';  
-const launcherConfigUrl = 'https://hgstudio.strator.gg/api/launcher/config';
+const AUTH_API_URL = 'https://hexa-mc.fr/api/yggdrasil/authserver/authenticate';
+const launcherConfigUrl = 'https://hexa-mc.fr/hexa/api/launcher/config';
 
 // --- AUTO UPDATER CONFIG ---
-autoUpdater.autoDownload = false;
-autoUpdater.autoInstallOnAppQuit = true;
+let autoUpdater = null;
+try {
+    autoUpdater = require('electron-updater').autoUpdater;
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = true;
+} catch (e) {
+    console.warn('electron-updater not available:', e.message);
+}
 
 // ---------------------------
 
-const rpcClientId = '1462409497116016682';
+const rpcClientId = '1481990469776048239';
 let rpcClient = null;
 let rpcStarted = false;
 
 // IPC Handlers for Updater
+ipcMain.handle('get-app-version', () => app.getVersion());
+const ALLOWED_EXTERNAL_ORIGINS = ['https://hexa-mc.fr', 'https://discord.com', 'https://modrinth.com', 'https://github.com'];
+ipcMain.handle('open-external', (e, url) => {
+    try {
+        const parsed = new URL(url);
+        if (!['https:', 'http:'].includes(parsed.protocol)) return;
+        if (!ALLOWED_EXTERNAL_ORIGINS.some(o => url.startsWith(o))) {
+            console.warn('[open-external] Blocked:', url);
+            return;
+        }
+        shell.openExternal(url);
+    } catch (_) {}
+});
+
+// Save banner image to instance folder (local file path or remote URL)
+ipcMain.handle('save-instance-banner', async (event, { folderName, url }) => {
+    try {
+        const instancesDir = path.join(app.getPath('appData'), '.hexa', 'instances');
+        const instDir = path.join(instancesDir, folderName);
+        await fs.mkdir(instDir, { recursive: true });
+
+        // Delete any existing banner files (different ext)
+        for (const ext of ['png','jpg','jpeg','webp']) {
+            try { await fs.unlink(path.join(instDir, `banner.${ext}`)); } catch {}
+        }
+
+        const isLocal = url.startsWith('file://') || /^[A-Za-z]:[\\\/]/.test(url) || url.startsWith('/');
+        if (isLocal) {
+            const localPath = url.startsWith('file://') ? url.replace(/^file:\/\/\//, '').replace(/^file:\/\//, '') : url;
+            const ext = localPath.split('.').pop().toLowerCase().replace(/[^a-z]/g, '') || 'png';
+            const safeExt = ['png','jpg','jpeg','webp'].includes(ext) ? ext : 'png';
+            await fs.copyFile(localPath, path.join(instDir, `banner.${safeExt}`));
+        } else {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const contentType = response.headers.get('content-type') || 'image/jpeg';
+            const extMap = { 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/webp': 'webp', 'image/png': 'png' };
+            const detectedExt = extMap[contentType.split(';')[0].trim()]
+                || (url.match(/\.(jpe?g|png|webp)(\?|$)/i)?.[1]?.replace('jpeg','jpg'))
+                || 'jpg';
+            const arrayBuffer = await response.arrayBuffer();
+            await fs.writeFile(path.join(instDir, `banner.${detectedExt}`), Buffer.from(arrayBuffer));
+        }
+        return { success: true };
+    } catch (e) {
+        console.error('save-instance-banner error:', e);
+        return { success: false, error: e.message };
+    }
+});
+
+// Load banner image from instance folder as base64 data URL
+ipcMain.handle('get-instance-banner', async (event, folderName) => {
+    try {
+        const instancesDir = path.join(app.getPath('appData'), '.hexa', 'instances');
+        const instDir = path.join(instancesDir, folderName);
+        // Try each supported extension
+        for (const [ext, mime] of [['png','image/png'],['jpg','image/jpeg'],['jpeg','image/jpeg'],['webp','image/webp']]) {
+            try {
+                const bannerPath = path.join(instDir, `banner.${ext}`);
+                const buffer = await fs.readFile(bannerPath);
+                return `data:${mime};base64,${buffer.toString('base64')}`;
+            } catch {}
+        }
+        return null;
+    } catch (e) {
+        return null;
+    }
+});
+
+ipcMain.handle('get-instance-playtime', async (_event, folderName) => {
+    if (!currentUser?.accessToken || !folderName) return 0;
+    try {
+        const safe = folderName.replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 128);
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 5000);
+        const r = await fetch(
+            `${HEXA_API}/profile/instance-playtime?folder=${encodeURIComponent(safe)}`,
+            { headers: { 'Authorization': `Bearer ${currentUser.accessToken}` }, signal: ctrl.signal }
+        );
+        clearTimeout(timer);
+        if (!r.ok) return 0;
+        const data = await r.json();
+        return data.total_minutes || 0;
+    } catch {
+        return 0;
+    }
+});
+
+// Add fetch-image-base64 handler — accepts a file path (string) or a file:// / http URL
+ipcMain.handle('fetch-image-base64', async (event, urlOrPath) => {
+    try {
+        let filePath = null;
+        // Detect Windows absolute path (C:\... or C:/...) or file:// URL
+        if (/^[A-Za-z]:[\\\/]/.test(urlOrPath)) {
+            filePath = urlOrPath;
+        } else if (urlOrPath.startsWith('file://')) {
+            filePath = decodeURIComponent(urlOrPath.replace(/^file:\/\/\//, '').replace(/^file:\/\//, '').replace(/^\/([A-Za-z]:)/, '$1'));
+        }
+        if (filePath) {
+            const buf = await fs.readFile(filePath);
+            const ext = path.extname(filePath).toLowerCase().replace('.', '');
+            const mime = ext === 'gif' ? 'image/gif' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png';
+            return `data:${mime};base64,${buf.toString('base64')}`;
+        }
+        const response = await fetch(urlOrPath);
+        if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        return `data:${response.headers.get('content-type') || 'image/png'};base64,${buffer.toString('base64')}`;
+    } catch (error) {
+        console.error('Error fetching image:', error);
+        return null;
+    }
+});
+
 ipcMain.handle('check-update', async () => {
+    if (!autoUpdater) return { available: false };
     try {
         console.log("Checking for updates...");
         const result = await autoUpdater.checkForUpdates();
@@ -48,32 +176,33 @@ ipcMain.handle('check-update', async () => {
 });
 
 ipcMain.handle('download-update', async () => {
+    if (!autoUpdater) return false;
     await autoUpdater.downloadUpdate();
     return true;
 });
 
 // Forward updater events to window
-autoUpdater.on('update-available', (info) => {
-    if(mainWindow) mainWindow.webContents.send('update-available', info);
-});
-autoUpdater.on('download-progress', (progressObj) => {
-    if(mainWindow) mainWindow.webContents.send('update-progress', progressObj.percent.toFixed(0));
-});
-autoUpdater.on('update-downloaded', () => {
-    if(mainWindow) mainWindow.webContents.send('update-downloaded');
-    // Prompt to restart? Or just wait for quit?
-    // autoUpdater.quitAndInstall(); // Optional: force
-    dialog.showMessageBox({
-        type: 'info',
-        title: 'Update Ready',
-        message: 'Install and restart now?',
-        buttons: ['Yes', 'Later']
-    }).then((buttonIndex) => {
-        if (buttonIndex.response === 0) {
-            autoUpdater.quitAndInstall(false, true);
-        }
+if (autoUpdater) {
+    autoUpdater.on('update-available', (info) => {
+        if(mainWindow) mainWindow.webContents.send('update-available', info);
     });
-});
+    autoUpdater.on('download-progress', (progressObj) => {
+        if(mainWindow) mainWindow.webContents.send('update-progress', progressObj.percent.toFixed(0));
+    });
+    autoUpdater.on('update-downloaded', () => {
+        if(mainWindow) mainWindow.webContents.send('update-downloaded');
+        dialog.showMessageBox({
+            type: 'info',
+            title: 'Update Ready',
+            message: 'Install and restart now?',
+            buttons: ['Yes', 'Later']
+        }).then((buttonIndex) => {
+            if (buttonIndex.response === 0) {
+                autoUpdater.quitAndInstall(false, true);
+            }
+        });
+    });
+}
 
 async function initRPC(enabled = true) {
     if (!enabled) {
@@ -135,27 +264,13 @@ async function getLatestLoaderVersion(type, mcVer) {
         } else if (type === 'neoforge') {
             const r = await fetch('https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge');
             const j = await r.json();
+            // NeoForge version prefix: "1.21.1" → "21.1", "26.1.2" → "26.1.2"
             const prefix = mcVer.startsWith('1.') ? mcVer.slice(2) : mcVer;
-            // Filter only stable releases (no beta, alpha, rc)
-            const matching = j.versions.filter(v => 
-                v.startsWith(prefix + '.') && 
-                !v.includes('-beta') && 
-                !v.includes('-alpha') && 
-                !v.includes('rc') &&
-                !v.includes('client') &&
-                !v.includes('installer') // exclude installer jars if listed
-            );
-            // Default fallback logic: if no stable found, try finding ANY matching, else hard fallback
-            if (matching.length > 0) return matching.pop();
-            
-            // If strict filtering failed, maybe try to find the "latest" non-snapshot?
-            // Some versions only have betas for new MC versions.
-            // But user specifically asked for RELEASE.
-            // If no release, maybe return a known stable?
-            // For 1.21.1, known stable is 21.1.60 or similar.
-            if (mcVer === '1.21.1') return '21.1.72'; // Updated known stable
-            
-            return '21.1.60';
+            const all = j.versions.filter(v => v.startsWith(prefix + '.'));
+            if (all.length === 0) return null;
+            // Prefer stable (no suffix), fall back to latest beta if no stable exists
+            const stable = all.filter(v => !v.includes('-'));
+            return stable.length > 0 ? stable.at(-1) : all.at(-1);
         } else if (type === 'quilt' || type === 'quiltmc') {
             const r = await fetch('https://meta.quiltmc.org/v3/versions/loader/' + mcVer);
             const j = await r.json();
@@ -173,6 +288,24 @@ async function getLatestLoaderVersion(type, mcVer) {
 
 let currentUser = null;
 const configPath = path.join(app.getPath('userData'), 'config.json');
+const deviceTrustPath = path.join(app.getPath('userData'), 'device_trust.json');
+
+async function loadDeviceToken(identifier) {
+    try {
+        const raw = await fs.readFile(deviceTrustPath, 'utf8');
+        const map = JSON.parse(raw);
+        // identifier peut être email ou username — on cherche les deux
+        return map[identifier.toLowerCase()] || null;
+    } catch (_) { return null; }
+}
+async function saveDeviceToken(identifier, username, token) {
+    let map = {};
+    try { map = JSON.parse(await fs.readFile(deviceTrustPath, 'utf8')); } catch (_) {}
+    // Stocker sous les deux clés pour couvrir email ET username
+    map[identifier.toLowerCase()] = token;
+    map[username.toLowerCase()]   = token;
+    await fs.writeFile(deviceTrustPath, JSON.stringify(map), 'utf8');
+}
 let mainWindow;
 let tray = null;
 if (process.defaultApp) {
@@ -224,26 +357,81 @@ app.on('open-url', (event, url) => {
     event.preventDefault();
     handleDeepLink(url);
 });
-function handleDeepLink(url) {
+async function handleDeepLink(url) {
     try {
         const urlObj = new URL(url);
+        // Only accept our own deep link scheme
+        if (urlObj.protocol !== 'hexa-launcher:') return;
+
         const params = new URLSearchParams(urlObj.search);
         const accessToken = params.get('accessToken');
-        const uuid = params.get('uuid');
-        const name = params.get('name');
-        const refreshToken = params.get('refreshToken');
-        if (accessToken && uuid && name) {
-            currentUser = {
-                username: name,
-                uuid: uuid,
-                accessToken: accessToken,
-                refreshToken: refreshToken,
-                type: 'microsoft'
-            };
-            if (mainWindow) {
-                mainWindow.webContents.send('auth-success', currentUser);
-            }
+        const clientToken = params.get('clientToken');
+        const uuid        = params.get('uuid');
+        const name        = params.get('name');
+        const error       = params.get('error');
+
+        if (error) {
+            if (mainWindow) mainWindow.webContents.send('auth-error', error);
+            return;
         }
+
+        if (!accessToken || !uuid || !name) return;
+
+        // Validate format to prevent token injection (UUIDs and alphanumeric only)
+        if (!/^[0-9a-f-]{32,36}$/i.test(accessToken)) return;
+        if (!/^[0-9a-f-]{32,36}$/i.test(uuid)) return;
+        if (!/^[a-zA-Z0-9_]{1,16}$/.test(name)) return;
+
+        // Fetch skin/cape/model
+        let skinUrl   = `https://hexa-mc.fr/hexa/api/textures/skins/${name}.png`;
+        let capeUrl   = null;
+        let skinModel = 'default';
+        try {
+            const cslRes = await fetch(`https://hexa-mc.fr/hexa/api/users/${name}.json`);
+            if (cslRes.ok) {
+                const csl = await cslRes.json();
+                if (csl.skins?.slim)    { skinUrl = csl.skins.slim;    skinModel = 'slim'; }
+                else if (csl.skins?.default) { skinUrl = csl.skins.default; }
+                if (csl.cape) capeUrl = csl.cape;
+            }
+        } catch (_) {}
+
+        // Fetch linked IDs + role + dbId via API (no direct DB)
+        let microsoftId = null, discordId = null, role = 'player', dbId = params.get('dbId') ? parseInt(params.get('dbId'), 10) : null;
+        if (!role || role === 'player') role = params.get('role') || 'player';
+        try {
+            const profileRes = await fetch(`https://hexa-mc.fr/hexa/api/profile/${encodeURIComponent(name)}`);
+            if (profileRes.ok) {
+                const profileData = await profileRes.json();
+                if (profileData.profile) {
+                    microsoftId = profileData.profile.microsoft_id || null;
+                    discordId   = profileData.profile.discord_id   || null;
+                    role        = profileData.profile.role         || 'player';
+                    if (!dbId) dbId = profileData.profile.id;
+                }
+            }
+        } catch (_) {}
+
+        currentUser = {
+            id:          dbId,
+            username:    name,
+            uuid,
+            accessToken,
+            clientToken: clientToken || '',
+            skin:        skinUrl,
+            skinModel,
+            cape:        capeUrl,
+            microsoft_id: microsoftId,
+            discord_id:   discordId,
+            role,
+            type: 'discord',
+        };
+
+        if (mainWindow) {
+            mainWindow.webContents.send('auth-success', currentUser);
+        }
+
+        preloadCaches();
     } catch (error) {
         console.error('Deep Link Error:', error);
     }
@@ -286,7 +474,6 @@ function createWindow() {
         backgroundColor: '#1a1a1a'
     });
     mainWindow.loadFile('src/index.html');  
-    mainWindow.webContents.openDevTools({ mode: 'detach' });  
     
     // Show window only when ready
     mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => { console.log('[Browser] ' + message); });
@@ -295,132 +482,802 @@ function createWindow() {
         mainWindow.show();
     });
 }
+app.on('before-quit', async () => {
+    if (currentUser) {
+        try {
+            const headers = { 'Content-Type': 'application/json' };
+            if (currentUser.accessToken) headers['Authorization'] = `Bearer ${currentUser.accessToken}`;
+            await fetch('https://hexa-mc.fr/hexa/api/heartbeat', {
+                method: 'POST', headers,
+                body: JSON.stringify({ status: 'offline', username: currentUser.username }),
+            }).catch(() => {});
+        } catch (_) {}
+    }
+});
+
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
         app.quit();
     }
 });
-// Database fetch users hook for Friends Network
+
+// WARDROBE IPC HANDLERS
+// Allow managing skins locally in slots
+
+const fsExtra = require('fs-extra');
+
+ipcMain.handle('wardrobe-get-slot', async (event, {username, slotId, type}) => {
+    // Return base64 of the file if exists
+    try {
+        const safeUser = username.replace(/[^a-zA-Z0-9_\-.]/g, '');
+        const slotDir = path.join(app.getPath('userData'), 'wardrobe', `slot_${slotId}`, type + 's'); // skins or capes
+        const filePath = path.join(slotDir, `${safeUser}.png`);
+        
+        if (await fsExtra.pathExists(filePath)) {
+            const buffer = await fs.readFile(filePath);
+            return `data:image/png;base64,${buffer.toString('base64')}`;
+        }
+        return null;
+    } catch (e) {
+        console.error("Wardrobe Get Error", e);
+        return null;
+    }
+});
+
+ipcMain.handle('wardrobe-save-slot', async (event, {username, slotId, type, fileBase64}) => {
+    try {
+        const safeUser = username.replace(/[^a-zA-Z0-9_\-.]/g, '');
+        const slotDir = path.join(app.getPath('userData'), 'wardrobe', `slot_${slotId}`, type + 's');
+        await fsExtra.ensureDir(slotDir);
+        
+        const filePath = path.join(slotDir, `${safeUser}.png`);
+        const buffer = Buffer.from(fileBase64.replace(/^data:image\/png;base64,/, ""), 'base64');
+        
+        await fs.writeFile(filePath, buffer);
+        console.log(`Saved ${type} to slot ${slotId} for ${safeUser}`);
+        return { success: true };
+    } catch (e) {
+        console.error("Wardrobe Save Error", e);
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('wardrobe-copy-to-active', async () => { return { success: true }; });
+
+ipcMain.handle('wardrobe-get-names', async (event, {username}) => {
+    try {
+        const safeUser = username.replace(/[^a-zA-Z0-9_\-.]/g, '');
+        const namesPath = path.join(app.getPath('userData'), 'wardrobe', `${safeUser}_names.json`);
+        if (await fsExtra.pathExists(namesPath)) {
+            const raw = await fs.readFile(namesPath, 'utf8');
+            return JSON.parse(raw);
+        }
+        return {};
+    } catch (e) { return {}; }
+});
+
+ipcMain.handle('wardrobe-save-names', async (event, {username, names}) => {
+    try {
+        const safeUser = username.replace(/[^a-zA-Z0-9_\-.]/g, '');
+        const dir = path.join(app.getPath('userData'), 'wardrobe');
+        await fsExtra.ensureDir(dir);
+        await fs.writeFile(path.join(dir, `${safeUser}_names.json`), JSON.stringify(names), 'utf8');
+        return { success: true };
+    } catch (e) { return { success: false }; }
+});
+
+ipcMain.handle('wardrobe-delete-slot', async (event, {username, slotId}) => {
+    try {
+        const safeUser = username.replace(/[^a-zA-Z0-9_\-.]/g, '');
+        const slotDir = path.join(app.getPath('userData'), 'wardrobe', `slot_${slotId}`);
+        const skinPath = path.join(slotDir, 'skins', `${safeUser}.png`);
+        const capePath = path.join(slotDir, 'capes', `${safeUser}.png`);
+        if (await fsExtra.pathExists(skinPath)) await fs.unlink(skinPath);
+        if (await fsExtra.pathExists(capePath)) await fs.unlink(capePath);
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+function _requireDbId() {
+    if (!currentUser) return null;
+    // dbId is cached on currentUser after first resolution
+    return currentUser.dbId || null;
+}
+async function _ensureDbId() {
+    if (!currentUser) return null;
+    if (!currentUser.dbId) {
+        // Resolve dbId via profile API (no direct DB)
+        try {
+            const r = await fetch(`https://hexa-mc.fr/hexa/api/profile/${encodeURIComponent(currentUser.username)}`);
+            if (r.ok) {
+                const d = await r.json();
+                if (d.profile?.id) currentUser.dbId = d.profile.id;
+            }
+        } catch (_) {}
+    }
+    return currentUser.dbId || null;
+}
+
+
+// ── Social / Friends ──────────────────────────────────────────────────────────
+
+function _socialHeaders() {
+    const h = { 'Content-Type': 'application/json' };
+    if (currentUser?.accessToken) h['Authorization'] = `Bearer ${currentUser.accessToken}`;
+    return h;
+}
+async function _socialPost(path, body = {}) {
+    const r = await fetch(`https://hexa-mc.fr/hexa/api${path}`, {
+        method: 'POST',
+        headers: _socialHeaders(),
+        body: JSON.stringify(body),
+    });
+    return r.json().catch(() => ({ success: false, message: `HTTP ${r.status}` }));
+}
+
 ipcMain.handle('fetch-users', async () => {
-    try {
-        const { fetchUsers } = require('./database.js');
-        const result = await fetchUsers();
-        return result;
-    } catch (e) {
-        console.log(e);
-        return { success: false, message: e.message };
-    }
-});
-
-// Friends API Handlers
-ipcMain.handle('add-friend', async (event, friendUsername) => {
-    if (!currentUser) {
-        return { success: false, message: "Vous devez être connecté pour ajouter un ami." };
+    const cached = _cacheGet(_cache.users, null);
+    if (cached) {
+        fetch(`${HEXA_API}/users`).then(r => r.json()).then(d => _cacheSet(_cache.users, null, d)).catch(() => {});
+        return cached;
     }
     try {
-        const { addFriend } = require('./database.js');
-        const { getUserId } = require("./database.js"); if (!currentUser.id) currentUser.id = await getUserId(currentUser.username); const result = await addFriend(currentUser.id, friendUsername);
-        return result;
-    } catch (e) {
-        console.log(e);
-        return { success: false, message: e.message };
-    }
-});
-
-
-ipcMain.handle('accept-friend', async (event, friendId) => {
-    if (!currentUser || !currentUser.id) return { success: false, message: "Non connecté" };
-    try {
-        const { acceptFriend } = require('./database.js');
-        return await acceptFriend(currentUser.id, friendId);
-    } catch (e) { return { success: false, message: e.message }; }
-});
-
-ipcMain.handle('reject-friend', async (event, friendId) => {
-    if (!currentUser || !currentUser.id) return { success: false, message: "Non connecté" };
-    try {
-        const { rejectFriend } = require('./database.js');
-        return await rejectFriend(currentUser.id, friendId);
-    } catch (e) { return { success: false, message: e.message }; }
-});
-
-ipcMain.handle('get-messages', async (event, friendId) => {
-    if (!currentUser || !currentUser.id) return { success: false, message: "Non connecté" };
-    try {
-        const { getMessages } = require('./database.js');
-        return await getMessages(currentUser.id, friendId);
-    } catch (e) { return { success: false, message: e.message }; }
-});
-
-ipcMain.handle('send-message', async (event, {friendId, message}) => {
-    if (!currentUser || !currentUser.id) return { success: false, message: "Non connecté" };
-    try {
-        const { sendMessage } = require('./database.js');
-        return await sendMessage(currentUser.id, friendId, message);
-    } catch (e) { return { success: false, message: e.message }; }
-});
-
-ipcMain.handle('edit-message', async (event, {msgId, newContent}) => {
-    if (!currentUser || !currentUser.id) return { success: false, message: "Non connecté" };
-    try {
-        const { editMessage } = require('./database.js');
-        return await editMessage(msgId, newContent, currentUser.id);
-    } catch (e) { return { success: false, message: e.message }; }
-});
-
-ipcMain.handle('delete-message', async (event, msgId) => {
-    if (!currentUser || !currentUser.id) return { success: false, message: "Non connecté" };
-    try {
-        const { deleteMessage } = require('./database.js');
-        return await deleteMessage(msgId, currentUser.id);
+        const r = await fetch(`${HEXA_API}/users`);
+        const d = await r.json();
+        _cacheSet(_cache.users, null, d);
+        return d;
     } catch (e) { return { success: false, message: e.message }; }
 });
 
 ipcMain.handle('fetch-friends', async () => {
-    if (!currentUser) {
-        return { success: false, message: "Non connecté" };
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    const cached = _cacheGet(_cache.friends, null);
+    if (cached) {
+        fetch(`${HEXA_API}/friends/all`, { headers: _socialHeaders() }).then(r => r.json()).then(d => _cacheSet(_cache.friends, null, d)).catch(() => {});
+        return cached;
     }
     try {
-        const { fetchFriends } = require('./database.js');
-        const { getUserId } = require('./database.js'); if(!currentUser.id) currentUser.id = await getUserId(currentUser.username); const result = await fetchFriends(currentUser.id);
-        return result;
-    } catch (e) {
-        console.log(e);
-        return { success: false, message: e.message };
+        const r = await fetch(`${HEXA_API}/friends/all`, { headers: _socialHeaders() });
+        const d = await r.json();
+        _cacheSet(_cache.friends, null, d);
+        return d;
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('add-friend', async (event, friendUsername) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try {
+        const res = await _socialPost('/friends/request', { username: friendUsername });
+        if (res.success) _cacheInvalidate(_cache.friends, null);
+        return res.success ? { success: true } : { success: false, message: res.error || res.message };
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('accept-friend', async (event, targetUsername) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try {
+        const res = await _socialPost('/friends/accept', { targetUsername });
+        if (res.success) _cacheInvalidate(_cache.friends, null);
+        return res.success ? { success: true } : { success: false, message: res.error || res.message };
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('reject-friend', async (event, targetUsername) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try {
+        const res = await _socialPost('/friends/respond', { targetUsername, status: 'rejected' });
+        if (res.success) _cacheInvalidate(_cache.friends, null);
+        return res.success ? { success: true } : { success: false, message: res.error || res.message };
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('remove-friend', async (event, friendId) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try {
+        const res = await _socialPost('/friends/remove', { friendId });
+        if (res.success) _cacheInvalidate(_cache.friends, null);
+        return res.success ? { success: true } : { success: false, message: res.error || res.message };
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+// ── DM Messages ───────────────────────────────────────────────────────────────
+ipcMain.handle('get-messages', async (event, friendId) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try {
+        const r = await fetch(`https://hexa-mc.fr/hexa/api/messages/${friendId}`, { headers: _socialHeaders() });
+        return await r.json();
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('send-message', async (event, {friendId, message, replyTo}) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try { return await _socialPost(`/messages/${friendId}`, { message, replyTo: replyTo || null }); }
+    catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('react-dm-message', async (_event, { msgId, emoji }) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try { return await _socialPost(`/messages/${msgId}/react`, { emoji }); }
+    catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('edit-message', async (event, {msgId, newContent}) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try {
+        const r = await fetch(`https://hexa-mc.fr/hexa/api/messages/${msgId}`, {
+            method: 'PATCH', headers: _socialHeaders(), body: JSON.stringify({ content: newContent }),
+        });
+        return await r.json();
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('delete-message', async (event, msgId) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try {
+        const r = await fetch(`https://hexa-mc.fr/hexa/api/messages/${msgId}`, {
+            method: 'DELETE', headers: _socialHeaders(),
+        });
+        return await r.json();
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+// ── Screenshot upload (social sharing) ───────────────────────────────────────
+ipcMain.handle('upload-chat-screenshot', async (event, { data, filename }) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try {
+        return await _socialPost('/chat/screenshot', { data, filename });
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+// ── Global Chat ───────────────────────────────────────────────────────────────
+ipcMain.handle('get-global-messages', async () => {
+    try {
+        const r = await fetch('https://hexa-mc.fr/hexa/api/chat/global?limit=80');
+        return await r.json();
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('send-global-message', async (event, message, replyTo = null) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    if (!message?.trim()) return { success: false, message: 'Empty message' };
+    try { return await _socialPost('/chat/global', { message: message.trim(), replyTo }); }
+    catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('get-hexa-messages', async () => {
+    if (!currentUser) return { success: false };
+    try {
+        const r = await fetch(`https://hexa-mc.fr/hexa/api/messages/hexa`, { headers: _socialHeaders() });
+        return r.json().catch(() => ({ success: false }));
+    } catch (e) { return { success: false }; }
+});
+
+ipcMain.handle('check-my-sanctions', async () => {
+    if (!currentUser) return { success: false };
+    try {
+        const r = await fetch(`https://hexa-mc.fr/hexa/api/moderation/my-sanctions`, { headers: _socialHeaders() });
+        return r.json().catch(() => ({ success: false }));
+    } catch (e) { return { success: false }; }
+});
+
+ipcMain.handle('moderation-sanction', async (event, { type, target, durationStr, reason }) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try { return await _socialPost('/moderation/sanction', { type, target, durationStr, reason }); }
+    catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('moderation-unsanction', async (event, { type, target }) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try { return await _socialPost('/moderation/unsanction', { type, target }); }
+    catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('delete-global-message', async (event, msgId) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try {
+        const r = await fetch(`https://hexa-mc.fr/hexa/api/chat/global/${msgId}`, {
+            method: 'DELETE', headers: _socialHeaders(),
+        });
+        return await r.json();
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('edit-global-message', async (event, { msgId, newContent }) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    if (!newContent?.trim()) return { success: false, message: 'Empty message' };
+    try {
+        const r = await fetch(`https://hexa-mc.fr/hexa/api/chat/global/${msgId}`, {
+            method: 'PATCH', headers: _socialHeaders(), body: JSON.stringify({ content: newContent.trim() }),
+        });
+        return await r.json();
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('pin-global-message', async (event, { msgId, pinned }) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try { return await _socialPost(`/chat/global/${msgId}/pin`, { pinned }); }
+    catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('react-global-message', async (event, { msgId, emoji }) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try { return await _socialPost(`/chat/global/${msgId}/react`, { emoji }); }
+    catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('get-my-db-id', async () => _ensureDbId().catch(() => null));
+
+ipcMain.handle('get-my-role', async () => currentUser?.role || 'player');
+
+ipcMain.handle('fetch-role-colors', async () => {
+    const cached = _cacheGet(_cache.roleColors, null);
+    if (cached) {
+        fetch(`${HEXA_API}/role-colors`).then(r => r.json()).then(d => _cacheSet(_cache.roleColors, null, d)).catch(() => {});
+        return cached;
     }
+    try {
+        const r = await fetch(`${HEXA_API}/role-colors`);
+        const d = await r.json();
+        _cacheSet(_cache.roleColors, null, d);
+        return d;
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('fetch-user-profile', async (_event, userId, bypassCache = false) => {
+    const key = String(userId);
+    const cached = _cacheGet(_cache.profiles, key);
+    if (cached && !bypassCache) {
+        fetch(`${HEXA_API}/profile/${encodeURIComponent(userId)}`).then(r => r.json()).then(d => {
+            _cacheSet(_cache.profiles, key, d);
+            if (d.profile?.id) _cacheSet(_cache.profiles, String(d.profile.id), d);
+            if (d.profile?.username) _cacheSet(_cache.profiles, d.profile.username, d);
+        }).catch(() => {});
+        return cached;
+    }
+    try {
+        const r = await fetch(`${HEXA_API}/profile/${encodeURIComponent(userId)}`);
+        const d = await r.json();
+        _cacheSet(_cache.profiles, key, d);
+        if (d.profile?.id) _cacheSet(_cache.profiles, String(d.profile.id), d);
+        if (d.profile?.username) _cacheSet(_cache.profiles, d.profile.username, d);
+        return d;
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+// ── Profile API helpers ──────────────────────────────────────────────────────
+const HEXA_API = 'https://hexa-mc.fr/hexa/api';
+
+// ── In-memory cache ──────────────────────────────────────────────────────────
+const CACHE_TTL = 60_000; // 1 minute
+const _cache = {
+    friends:    { data: null, ts: 0 },
+    users:      { data: null, ts: 0 },
+    roleColors: { data: null, ts: 0 },
+    profiles:   new Map(), // key (userId string) → { data, ts }
+};
+function _cacheGet(store, key) {
+    const entry = key != null ? store.get(key) : store;
+    if (!entry || !entry.data) return null;
+    if (Date.now() - entry.ts > CACHE_TTL) return null;
+    return entry.data;
+}
+function _cacheSet(store, key, data) {
+    if (key != null) store.set(key, { data, ts: Date.now() });
+    else { store.data = data; store.ts = Date.now(); }
+}
+function _cacheInvalidate(store, key) {
+    if (key != null) store.delete(key);
+    else { store.data = null; store.ts = 0; }
+}
+
+async function preloadCaches() {
+    if (!currentUser) return;
+    const h = _socialHeaders();
+    try {
+        const [usersRes, friendsRes, colorsRes] = await Promise.allSettled([
+            fetch(`${HEXA_API}/users`).then(r => r.json()),
+            fetch(`${HEXA_API}/friends/all`, { headers: h }).then(r => r.json()),
+            fetch(`${HEXA_API}/role-colors`).then(r => r.json()),
+        ]);
+        if (usersRes.status  === 'fulfilled' && usersRes.value)   _cacheSet(_cache.users,      null, usersRes.value);
+        if (friendsRes.status=== 'fulfilled' && friendsRes.value) _cacheSet(_cache.friends,    null, friendsRes.value);
+        if (colorsRes.status === 'fulfilled' && colorsRes.value)  _cacheSet(_cache.roleColors, null, colorsRes.value);
+
+        // Own profile
+        const ownKey = String(currentUser.username);
+        const profRes = await fetch(`${HEXA_API}/profile/${encodeURIComponent(ownKey)}`).then(r => r.json()).catch(() => null);
+        if (profRes) {
+            _cacheSet(_cache.profiles, ownKey, profRes);
+            if (profRes.profile?.id) _cacheSet(_cache.profiles, String(profRes.profile.id), profRes);
+        }
+
+        if (mainWindow) mainWindow.webContents.send('cache-ready', true);
+    } catch (_) {}
+}
+
+function profileAuthHeader() {
+    return currentUser?.accessToken ? { 'Authorization': `Bearer ${currentUser.accessToken}` } : {};
+}
+
+async function profilePost(endpoint, body) {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    const res = await fetch(`${HEXA_API}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...profileAuthHeader() },
+        body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { success: false, message: data.error || `HTTP ${res.status}` };
+    return { success: true, ...data };
+}
+
+function _invalidateOwnProfile() {
+    if (!currentUser) return;
+    _cacheInvalidate(_cache.profiles, currentUser.username);
+    if (currentUser.dbId) _cacheInvalidate(_cache.profiles, String(currentUser.dbId));
+    if (currentUser.id)   _cacheInvalidate(_cache.profiles, String(currentUser.id));
+}
+
+ipcMain.handle('save-profile-bio', async (_event, bio) => {
+    try {
+        const res = await profilePost('/profile/bio', { bio });
+        if (res.success) _invalidateOwnProfile();
+        return res;
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('save-profile-banner', async (_event, { bannerDataUrl }) => {
+    try {
+        let res;
+        if (bannerDataUrl === '') {
+            res = await profilePost('/profile/banner-remove', {});
+        } else if (bannerDataUrl.startsWith('color:')) {
+            res = await profilePost('/profile/banner-color', { color: bannerDataUrl.slice(6) });
+        } else if (bannerDataUrl.startsWith('gradient:')) {
+            const [top, bottom] = bannerDataUrl.slice(9).split(',');
+            res = await profilePost('/profile/banner-gradient', { top, bottom });
+        } else {
+            res = await profilePost('/profile/banner', { bannerDataUrl });
+        }
+        if (res.success) _invalidateOwnProfile();
+        return res;
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('save-profile-bg', async (_event, bg) => {
+    try {
+        const res = await profilePost('/profile/bg', { bg });
+        if (res.success) _invalidateOwnProfile();
+        return res;
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('change-username', async (_event, newUsername, totpCode) => {
+    try {
+        const body = { username: newUsername };
+        if (totpCode) body.totpCode = totpCode;
+        const res = await profilePost('/profile/username', body);
+        if (res.success) { _invalidateOwnProfile(); currentUser.username = newUsername; }
+        return res;
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('toggle-badge-display', async (_event, { badgeId, displayed }) => {
+    try { return await profilePost('/profile/badge-toggle', { badgeId, displayed }); }
+    catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('set-show-role-badge', async (_event, show) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try { return await profilePost('/profile/show-role-badge', { show }); }
+    catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('get-all-user-badges', async () => {
+    if (!currentUser) return { success: false, badges: [] };
+    try {
+        const res = await fetch(`${HEXA_API}/profile/${encodeURIComponent(currentUser.username)}`, {
+            headers: profileAuthHeader(),
+        });
+        const data = await res.json().catch(() => ({}));
+        return { success: true, badges: data.badges || [] };
+    } catch (e) { return { success: false, badges: [] }; }
+});
+
+// ── Cosmetics ────────────────────────────────────────────────────────────────
+ipcMain.handle('cosmetics-get-inventory', async () => {
+    if (!currentUser) return { success: false, inventory: [] };
+    try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
+        const r = await fetch(`${HEXA_API}/cosmetics/inventory`, { headers: profileAuthHeader(), signal: ctrl.signal });
+        clearTimeout(timer);
+        const data = await r.json();
+        if (!r.ok) return { success: false, inventory: [], _status: r.status };
+        return data;
+    } catch (e) { return { success: false, inventory: [], _error: e.message }; }
+});
+
+ipcMain.handle('cosmetics-equip', async (_event, { cosmeticId, equipped }) => {
+    try {
+        const r = await fetch(`${HEXA_API}/cosmetics/equip`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...profileAuthHeader() },
+            body: JSON.stringify({ cosmeticId, equipped }),
+        });
+        return await r.json();
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+// owner/admin only
+ipcMain.handle('cosmetics-grant', async (_event, { username, cosmeticId }) => {
+    try {
+        const r = await fetch(`${HEXA_API}/cosmetics/grant`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...profileAuthHeader() },
+            body: JSON.stringify({ username, cosmeticId }),
+        });
+        return await r.json();
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('cosmetics-revoke', async (_event, { username, cosmeticId }) => {
+    try {
+        const r = await fetch(`${HEXA_API}/cosmetics/revoke`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...profileAuthHeader() },
+            body: JSON.stringify({ username, cosmeticId }),
+        });
+        return await r.json();
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('cosmetics-get-catalog', async () => {
+    try {
+        const r = await fetch(`${HEXA_API}/cosmetics/catalog`);
+        return await r.json();
+    } catch (e) { return { success: false, cosmetics: [] }; }
+});
+
+ipcMain.handle('cosmetics-admin-lookup', async (_event, username) => {
+    try {
+        const r = await fetch(`${HEXA_API}/cosmetics/admin/users/${encodeURIComponent(username)}`, {
+            headers: profileAuthHeader(),
+        });
+        return await r.json();
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+// owner/admin — role & badge management
+ipcMain.handle('admin-set-role', async (_event, { username, role }) => {
+    try {
+        const r = await fetch(`${HEXA_API}/admin/set-role`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...profileAuthHeader() },
+            body: JSON.stringify({ username, role }),
+        });
+        return await r.json();
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('admin-grant-badge', async (_event, { username, badgeId }) => {
+    try {
+        const r = await fetch(`${HEXA_API}/admin/grant-badge`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...profileAuthHeader() },
+            body: JSON.stringify({ username, badgeId }),
+        });
+        return await r.json();
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('admin-revoke-badge', async (_event, { username, badgeId }) => {
+    try {
+        const r = await fetch(`${HEXA_API}/admin/revoke-badge`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...profileAuthHeader() },
+            body: JSON.stringify({ username, badgeId }),
+        });
+        return await r.json();
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('admin-get-badges-catalog', async () => {
+    try {
+        const r = await fetch(`${HEXA_API}/admin/badges-catalog`, { headers: profileAuthHeader() });
+        return await r.json();
+    } catch (e) { return { success: false, badges: [] }; }
+});
+
+ipcMain.handle('get-recent-activity', async (_event, userId) => {
+    try {
+        const r = await fetch(`https://hexa-mc.fr/hexa/api/profile/${encodeURIComponent(userId)}/activity`);
+        return await r.json();
+    } catch (e) { return { success: true, activities: [] }; }
+});
+
+ipcMain.handle('verify-2fa', async (_event, { tempToken, code }) => {
+    try {
+        const r = await fetch(`${HEXA_API}/2fa/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tempToken, code }),
+        });
+        const d = await r.json();
+        if (!r.ok || !d.success) return { success: false, message: d.error || `HTTP ${r.status}` };
+
+        // Récupère skin/cape/model + infos profil comme dans login normal
+        const name = d.selectedProfile.name;
+        let skinUrl = `${HEXA_API}/textures/skins/${name}.png`;
+        let capeUrl = null, skinModel = 'default';
+        try {
+            const cslRes = await fetch(`${HEXA_API}/users/${name}.json`);
+            if (cslRes.ok) {
+                const csl = await cslRes.json();
+                if (csl.skins?.slim)    { skinUrl = csl.skins.slim;    skinModel = 'slim'; }
+                else if (csl.skins?.default) skinUrl = csl.skins.default;
+                if (csl.cape) capeUrl = csl.cape;
+            }
+        } catch (_) {}
+
+        let microsoftId = null, discordId = null;
+        try {
+            const pRes = await fetch(`${HEXA_API}/profile/${encodeURIComponent(name)}`);
+            if (pRes.ok) {
+                const pd = await pRes.json();
+                microsoftId = pd.profile?.microsoft_id || null;
+                discordId   = pd.profile?.discord_id   || null;
+            }
+        } catch (_) {}
+
+        currentUser = {
+            id: d.user?.dbId,
+            username: name,
+            uuid: d.selectedProfile.id,
+            accessToken: d.accessToken,
+            clientToken: d.clientToken,
+            skin: skinUrl, skinModel, cape: capeUrl,
+            microsoft_id: microsoftId, discord_id: discordId,
+            role: d.user?.role || 'player',
+            type: 'hexa',
+        };
+        if (d.deviceToken) {
+            const loginIdentifier = d.identifier || name;
+            await saveDeviceToken(loginIdentifier, name, d.deviceToken);
+        }
+        preloadCaches();
+        return { success: true, user: currentUser };
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('setup-2fa', async () => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try {
+        const r = await fetch(`${HEXA_API}/2fa/setup`, { headers: { 'Authorization': `Bearer ${currentUser.accessToken}` } });
+        return await r.json();
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('enable-2fa', async (_event, code) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try {
+        const r = await fetch(`${HEXA_API}/2fa/enable`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentUser.accessToken}` },
+            body: JSON.stringify({ code }),
+        });
+        return await r.json();
+    } catch (e) { return { success: false, message: e.message }; }
+});
+
+ipcMain.handle('disable-2fa', async (_event, code) => {
+    if (!currentUser) return { success: false, message: 'Not connected' };
+    try {
+        const r = await fetch(`${HEXA_API}/2fa/disable`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentUser.accessToken}` },
+            body: JSON.stringify({ code }),
+        });
+        return await r.json();
+    } catch (e) { return { success: false, message: e.message }; }
 });
 
 ipcMain.handle('login-user', async (event, credentials) => {
-    // Revert to EXACTLY the same logic as hg.launcher for safety.
-    // If renderer sends username, use it. If identifier, use it.
     const identifier = credentials.username || credentials.identifier;
     const password = credentials.password;
+
     try {
-        console.log('Authenticating via API:', AUTH_API_URL, 'User:', identifier);
-        const response = await fetch(AUTH_API_URL, {
+        console.log("Attempting Yggdrasil Login...");
+        const deviceToken = await loadDeviceToken(identifier);
+        const yggRes = await fetch('https://hexa-mc.fr/api/yggdrasil/authserver/authenticate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ identifier, password })
+            body: JSON.stringify({ username: identifier, password: password, requestUser: true, deviceToken })
         });
-        if (!response.ok) {
-           throw new Error(`API Error: ${response.status}`);
+
+        if (!yggRes.ok) {
+            const errData = await yggRes.json().catch(() => ({}));
+            const msg = errData.errorMessage || `Server error (${yggRes.status})`;
+            console.warn("Yggdrasil Login Failed:", msg);
+            return { success: false, message: msg };
         }
-        const data = await response.json();
-        if (data.success) {
-            currentUser = data.user; console.log("CURRENT USER KEYS:", Object.keys(currentUser)); if(data.user.skin) console.log("SKIN:", data.user.skin); if(data.user.cape) console.log("CAPE:", data.user.cape);
-            return { success: true, user: currentUser };
-        } else {
-            return { success: false, message: data.message || 'Erreur inconnue.' };
+
+        const data = await yggRes.json();
+
+        // 2FA requis → retourner le tempToken au renderer
+        if (data.requires_2fa) {
+            return { success: false, requires_2fa: true, tempToken: data.tempToken };
         }
-    } catch (error) {
-        console.error('Login API Error:', error);
-        return { success: false, message: "Impossible de contacter le serveur d'authentification." };
+
+        const profile = data.selectedProfile;
+
+        // Fetch skin/cape URLs + skin_model depuis le CSL endpoint
+        let skinUrl = `https://hexa-mc.fr/hexa/api/textures/skins/${profile.name}.png`;
+        let capeUrl = null;
+        let skinModel = 'default';
+        try {
+            const cslRes = await fetch(`https://hexa-mc.fr/hexa/api/users/${profile.name}.json`);
+            if (cslRes.ok) {
+                const csl = await cslRes.json();
+                if (csl.skins && csl.skins.slim) {
+                    skinUrl = csl.skins.slim;
+                    skinModel = 'slim';
+                } else if (csl.skins && csl.skins.default) {
+                    skinUrl = csl.skins.default;
+                    skinModel = 'default';
+                }
+                if (csl.cape) capeUrl = csl.cape;
+            }
+        } catch (_) {}
+
+        // Fetch microsoft_id + discord_id + role via profile API
+        let microsoftId = null, discordId = null, role = data.user?.role || 'player';
+        try {
+            const profileRes = await fetch(`https://hexa-mc.fr/hexa/api/profile/${encodeURIComponent(profile.name)}`, {
+                headers: { 'Authorization': `Bearer ${data.accessToken}` }
+            });
+            if (profileRes.ok) {
+                const profileData = await profileRes.json();
+                if (profileData.profile) {
+                    microsoftId = profileData.profile.microsoft_id || null;
+                    discordId   = profileData.profile.discord_id   || null;
+                    role        = profileData.profile.role || role;
+                }
+            }
+        } catch (_) {}
+
+        currentUser = {
+            id: data.user?.dbId || data.user?.id || profile.id,
+            username: profile.name,
+            uuid: profile.id,
+            accessToken: data.accessToken,
+            clientToken: data.clientToken,
+            skin: skinUrl,
+            skinModel: skinModel,
+            cape: capeUrl,
+            microsoft_id: microsoftId,
+            discord_id: discordId,
+            role,
+            type: 'hexa'
+        };
+
+        console.log("Yggdrasil Login Successful! UUID:", currentUser.uuid);
+        preloadCaches();
+        return { success: true, user: currentUser };
+
+    } catch(e) {
+        console.error("Login Exception:", e);
+        return { success: false, message: "Unable to connect to the server." };
     }
 });
 ipcMain.handle('restore-session', (event, user) => {
     if (user) {
         console.log("Session restored for:", user.username);
         currentUser = user;
+        preloadCaches();
         return { success: true };
     } else {
         console.log("Session cleared.");
@@ -451,7 +1308,7 @@ async function verifyAssets(assetIndexObj, globalRoot, mainWindow) {
     const msgh = [];
     const entries = Object.entries(objects);
     console.log(`[Assets] Scanning ${entries.length} objects from index ${assetIndexObj.id || 'unknown'}...`);
-    if(mainWindow) mainWindow.webContents.send('log', `V�rification ${entries.length} assets (Audio/Textures)...`);
+    if(mainWindow) mainWindow.webContents.send('log', `Vérification ${entries.length} assets (Audio/Textures)...`);
     let missingCount = 0;
     for (const [key, meta] of entries) {
         const hash = meta.hash;
@@ -466,20 +1323,20 @@ async function verifyAssets(assetIndexObj, globalRoot, mainWindow) {
     }
     if (msgh.length > 0) {
         console.log(`[Assets] Found ${msgh.length} missing assets. Downloading manually (Modrinth-style)...`);
-        if(mainWindow) mainWindow.webContents.send('log', `R�cup�ration de ${msgh.length} assets manquants...`);
+        if(mainWindow) mainWindow.webContents.send('log', `Récupération de ${msgh.length} assets manquants...`);
         const BATCH_SIZE = 50; 
         for (let i = 0; i < msgh.length; i += BATCH_SIZE) {
             const batch = msgh.slice(i, i + BATCH_SIZE);
             await Promise.all(batch.map(item => downloadFile(item.url, item.path).catch(e => console.error(`Failed ${item.hash}`, e))));
             if (mainWindow) {
                 const pct = Math.round(((i + batch.length) / msgh.length) * 100);
-                mainWindow.webContents.send('log', `T�l�chargement Assets: ${pct}%`);
+                mainWindow.webContents.send('log', `Téléchargement Assets: ${pct}%`);
             }
         }
         if(mainWindow) mainWindow.webContents.send('log', `Assets complets !`);
     } else {
         console.log("[Assets] All assets verified present.");
-        if(mainWindow) mainWindow.webContents.send('log', `Assets int�gres.`);
+        if(mainWindow) mainWindow.webContents.send('log', `Assets intègres.`);
     }
 }
 async function fixAssetIndex(globalRoot, assetIndexId, assetIndexContent) {
@@ -524,6 +1381,21 @@ async function ensureAuthlibInjector(rootDir) {
     }
 }
 
+function getRequiredJava(gameVersion) {
+    if (!gameVersion) return 17;
+    const parts = gameVersion.split('.').map(Number);
+    // New versioning: 26.x.y (major >= 25 → Java 25)
+    if (parts[0] >= 25) return 25;
+    // 1.21+ → Java 21
+    if (parts[0] === 1 && parts[1] >= 21) return 21;
+    // 1.20.5+ → Java 21
+    if (parts[0] === 1 && parts[1] === 20 && (parts[2] || 0) >= 5) return 21;
+    // 1.17-1.20.4 → Java 17
+    if (parts[0] === 1 && parts[1] >= 17) return 17;
+    // 1.16 and below → Java 8
+    return 8;
+}
+
 async function ensureJava(rootDir, mainWindow, version = 17) {
     const javaDir = path.join(rootDir, 'java');
     const javaVerDir = path.join(javaDir, version.toString());
@@ -536,9 +1408,10 @@ async function ensureJava(rootDir, mainWindow, version = 17) {
     if (mainWindow) mainWindow.webContents.send('log', `Downloading Java ${version}...`);
     console.log(`Downloading Java ${version}...`);
     const urls = {
-        8: "https://api.adoptium.net/v3/binary/latest/8/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk",
+        8:  "https://api.adoptium.net/v3/binary/latest/8/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk",
         17: "https://api.adoptium.net/v3/binary/latest/17/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk",
-        21: "https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk"
+        21: "https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk",
+        25: "https://api.adoptium.net/v3/binary/latest/25/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk"
     };
     const url = urls[version];
     if (!url) throw new Error(`Unsupported Java version: ${version}`);
@@ -622,7 +1495,7 @@ async function refreshSession(mainWindow) {
 
     if (currentUser.refreshToken) {
         try {
-            if (mainWindow) mainWindow.webContents.send('log', "Rafra�chissement du token Microsoft (Via API Secure)...");
+            if (mainWindow) mainWindow.webContents.send('log', "Refreshing Microsoft token (Secure API)...");
             console.log("Refreshing Microsoft Token via Auth API...");
             
             const refreshRes = await fetch(AUTH_API_URL, {
@@ -690,7 +1563,7 @@ async function refreshSession(mainWindow) {
         } catch (e) {
             console.error("Token Refresh Failed:", e);
             if(mainWindow) mainWindow.webContents.send('log', typeof e === 'string' ? e : e.message);
-            return { success: false, message: "Authentication error: " + (e.message || "Erreur inconnue") };
+            return { success: false, message: "Authentication error: " + (e.message || "Unknown error") };
         }
     }
     
@@ -699,7 +1572,7 @@ async function refreshSession(mainWindow) {
     }
 
     if (currentUser.type !== 'microsoft' || !currentUser.accessToken) {
-        return { success: false, message: "Session invalide/expir�e." };
+        return { success: false, message: "Invalid/expired session." };
     }
     
     return { success: true };
@@ -710,10 +1583,9 @@ ipcMain.handle('launch-game', async (event, options) => {
         console.log("Launch Game requested (Clean Logic)!");
         
         // 1. Authentication
-        console.log("Starting refreshSession...");
-        console.log("Auth bypassed for Hexa Crack version!");
-        if(!currentUser) currentUser = { username: 'Player', uuid: 'ffffffff-ffff-ffff-ffff-ffffffffffff', accessToken: '0', type: 'offline' };
-        currentUser.type = 'offline';
+        if (!currentUser) {
+            return { success: false, message: "You must be logged in to launch the game." };
+        }
 
         // 2. Configuration & Paths
     console.log("Loading config...");
@@ -745,24 +1617,7 @@ ipcMain.handle('launch-game', async (event, options) => {
             let lVer = _instData.loaderVersion || null;
             if (!lVer) {
                 try {
-                    if (lType === 'fabric') {
-                        const r = await fetch('https://meta.fabricmc.net/v2/versions/loader');
-                        const ls = await r.json();
-                        lVer = (ls.find(l => l.stable) || ls[0]).version;
-                    } else if (lType === 'forge') {
-                        const r = await fetch('https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json');
-                        const d = await r.json();
-                        lVer = d.promos[`${gameVersion}-recommended`] || d.promos[`${gameVersion}-latest`];
-                    } else if (lType === 'neoforge') {
-                        const r = await fetch('https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml');
-                        const txt = await r.text();
-                        const m = txt.match(/<latest>(.*?)<\/latest>/);
-                        lVer = m ? m[1] : '21.1.120';
-                    } else if (lType === 'quilt') {
-                        const r = await fetch('https://meta.quiltmc.org/v3/versions/loader');
-                        const ls = await r.json();
-                        lVer = ls[0].version;
-                    }
+                    lVer = await getLatestLoaderVersion(lType, gameVersion);
                 } catch (e) {
                     console.warn(`[Instance] Could not resolve ${lType} version:`, e.message);
                     if (lType === 'fabric') lVer = '0.16.10';
@@ -818,48 +1673,47 @@ ipcMain.handle('launch-game', async (event, options) => {
     // Assuming installMrPack is still in main.js. It is.
     if (activeModpack && !isCustom) {
         try {
-            if (mainWindow) mainWindow.webContents.send('log', `Mise � jour Modpack: ${activeModpack.name}`);
-            let modpackUrl = activeModpack.url.startsWith('/') ? `https://hgstudio.strator.gg${activeModpack.url}` : activeModpack.url;
+            if (mainWindow) mainWindow.webContents.send('log', `Mise à jour Modpack: ${activeModpack.name}`);
+            let modpackUrl = activeModpack.url.startsWith('/') ? `https://hexa-mc.fr${activeModpack.url}` : activeModpack.url;
             const installRes = await installMrPack(modpackUrl, rootPath, mainWindow);
             if (installRes) {
                  gameVersion = installRes.gameVersion;
                  loaderConfig = installRes.loader;
             }
         } catch (e) {
-            return { success: false, message: "Erreur Modpack: " + e.message };
+            return { success: false, message: "Modpack error: " + e.message };
         }
     } else if (isCustom && mainWindow) {
-        mainWindow.webContents.send('log', `Lancement personnalis�: ${customInstanceData.name}`);
+        mainWindow.webContents.send('log', `Lancement personnalisé: ${customInstanceData.name}`);
     }
 
     // 4. Java Setup
-    let targetJava = 17;
-    const vParts = gameVersion.split('.').map(Number);
-    if (vParts[1] > 20 || (vParts[1] === 20 && vParts.length > 2 && vParts[2] >= 5)) targetJava = 21; // 1.20.5+ and 1.21+
+    let targetJava = getRequiredJava(gameVersion);
     
-    if (isCustom && customInstanceData) {
-        if (customInstanceData.memory) {
-            config.maxRam = customInstanceData.memory;
-            config.minRam = customInstanceData.memory;
+    // Apply per-instance overrides (both official & custom instances)
+    // For official instances, overrides are spread into options by the renderer
+    const instData = customInstanceData || options;
+    if (instData) {
+        if (instData.memory) {
+            config.maxRam = instData.memory;
+            config.minRam = instData.memory;
         }
-        if (customInstanceData.resolution) {
-            config.resolution = customInstanceData.resolution;
-        }
-        if (customInstanceData.jvmArgs) {
-            config.jvmArgs = customInstanceData.jvmArgs;
-        }
+        if (instData.resolution) config.resolution = instData.resolution;
+        if (instData.jvmArgs)    config.jvmArgs    = instData.jvmArgs;
     }
 
     let javaPath = config[`javaPath${targetJava}`] || config.javaPath;
-    if (isCustom && customInstanceData && customInstanceData.javaVersion === 'custom' && customInstanceData.javaPath) {
-        javaPath = customInstanceData.javaPath;
+    if (instData && instData.javaVersion === 'custom' && instData.javaPath) {
+        javaPath = instData.javaPath;
+    } else if (instData && instData.javaVersion && instData.javaVersion !== 'auto') {
+        javaPath = config[`javaPath${instData.javaVersion}`] || javaPath;
     }
 
     if (!javaPath) {
         try {
             javaPath = await ensureJava(globalRoot, mainWindow, targetJava);
         } catch (e) {
-            return { success: false, message: "Erreur Java: " + e.message };
+            return { success: false, message: "Java error: " + e.message };
         }
     }
 
@@ -873,37 +1727,40 @@ ipcMain.handle('launch-game', async (event, options) => {
             hash[8] = (hash[8] & 0x3f) | 0x80;
             return formatUuid(hash.toString('hex'));
         };
-        const isOffline = currentUser.type === 'offline' || currentUser.type === 'hexa' || (currentUser.uuid && currentUser.uuid.includes('ffffffff'));
-        const finalUuid = isOffline ? generateOfflineUuid(currentUser.username) : formatUuid(currentUser.uuid);
+        const isOffline = currentUser.type === 'offline';
+        const isHexa = currentUser.type === 'hexa';
+        const finalUuid = isHexa ? currentUser.uuid : (isOffline ? generateOfflineUuid(currentUser.username) : formatUuid(currentUser.uuid));
 
         const authorization = {
-            access_token: isOffline ? '0' : currentUser.accessToken,
-            client_token: finalUuid, 
+            access_token: (isHexa || !isOffline) ? currentUser.accessToken : '0',
+            client_token: currentUser.clientToken || finalUuid,
             uuid: finalUuid,
             name: currentUser.username,
             user_properties: {},
-            meta: { type: "mojang" } // Always use 'mojang' or 'legacy' to avoid demo mode and load authlib correctly
+            meta: { type: "mojang", demo: false }
         };
 
         // --- AUTHLIB INJECTOR (CUSTOM SKINS) ---
         const authlibPath = await ensureAuthlibInjector(globalRoot);
         const customJvmArgs = config.jvmArgs ? config.jvmArgs.split(' ') : [];
         if (authlibPath) {
-            const yggdrasilUrl = "http://91.197.6.177:24607/api/yggdrasil";
+            const yggdrasilUrl = "https://hexa-mc.fr/api/yggdrasil";
             customJvmArgs.push(`-javaagent:${authlibPath}=${yggdrasilUrl}`);
-            // Force IPv4 to prevent connection issues on some networks
             customJvmArgs.push('-Djava.net.preferIPv4Stack=true');
             if (mainWindow) mainWindow.webContents.send('log', `Authlib-Injector activé: ${yggdrasilUrl}`);
         }
+        // Required by NeoForge production mode
+        customJvmArgs.push(`-DlibraryDirectory=${path.join(globalRoot, 'libraries')}`);
 
         const launchOptions = {
             authorization,
-            root: globalRoot, // Use shared .hexa root for versions/assets/libraries
-            gameDirectory: rootPath, // Use instance folder for saves/mods/configs
-            version: { number: gameVersion, type: "release" }, // Will be overridden inside launcher.js if custom
+            accessToken: currentUser?.accessToken || null,
+            instanceFolder: instanceFolderName,
+            root: globalRoot,
+            gameDirectory: rootPath,
+            version: { number: gameVersion, type: "release" },
             loader: loaderConfig,
             javaPath,
-            // Removed libraryRoot/assetRoot overrides to use shared defaults
             customArgs: customJvmArgs
         };
         
@@ -914,57 +1771,36 @@ ipcMain.handle('launch-game', async (event, options) => {
              launchOptions.customArgs.push('--server', ip);
              if (port) launchOptions.customArgs.push('--port', port);
         } else if (config.autoConnectIP && isATM10) {
-             if (mainWindow) mainWindow.webContents.send('log', "Auto-Connect d�sactiv� pour ATM10.");
+             if (mainWindow) mainWindow.webContents.send('log', "Auto-Connect désactivé pour ATM10.");
         }
 
-// --- APPLY CRACK SKIN BEFORE LAUNCH ---
-        try {
-            const skinUrl = currentUser.skin || `http://91.197.6.177:24607/api/textures/${currentUser.username}.png`;
-            const capeUrl = currentUser.cape || null;
-            if (mainWindow) mainWindow.webContents.send('log', `Application du skin pour ${currentUser.username}...`);
-            // Write to the INSTANCE path so CustomSkinLoader finds it in the game's working dir
-            const skinBaseDir = path.join(rootPath, 'CustomSkinLoader', 'LocalSkin');
-            const skinsDir = path.join(skinBaseDir, 'skins');
-            const capesDir = path.join(skinBaseDir, 'capes');
-            await fs.mkdir(skinsDir, { recursive: true });
-            await fs.mkdir(capesDir, { recursive: true });
-            // Write CustomSkinLoader.json to the correct config/ directory
-            const cslConfigDir = path.join(rootPath, 'config');
-            await fs.mkdir(cslConfigDir, { recursive: true });
-            const cslCfgPath = path.join(cslConfigDir, 'CustomSkinLoader.json');
-            const cslExists = await fs.access(cslCfgPath).then(() => true).catch(() => false);
-            if (!cslExists) {
-                await fs.writeFile(cslCfgPath, JSON.stringify({ loadlist: [{ type: 'LocalSkin', name: 'LocalSkin', checkPNG: false }] }, null, 4));
-                if (mainWindow) mainWindow.webContents.send('log', `CustomSkinLoader.json créé: ${cslCfgPath}`);
-            }
-            const destSkin = path.join(skinsDir, `${currentUser.username}.png`);
-            if (skinUrl.startsWith('http')) {
-                const res = await fetch(skinUrl).catch(() => null);
-                if (res && res.ok) {
-                    const buf = await res.arrayBuffer();
-                    await fs.writeFile(destSkin, Buffer.from(buf));
-                    if (mainWindow) mainWindow.webContents.send('log', `Skin téléchargé: ${destSkin}`);
-                }
-            } else if (fsOriginal.existsSync(skinUrl)) {
-                await fs.copyFile(skinUrl, destSkin);
-            }
-            const destCape = path.join(capesDir, `${currentUser.username}.png`);
-            if (capeUrl) {
-                const res = await fetch(capeUrl).catch(() => null);
-                if (res && res.ok) {
-                    const buf = await res.arrayBuffer();
-                    await fs.writeFile(destCape, Buffer.from(buf));
-                }
-            } else {
-                if (fsOriginal.existsSync(destCape)) await fs.unlink(destCape).catch(() => {});
-            }
-        } catch (skinErr) {
-            console.warn('[SkinApply] Failed to apply skin:', skinErr.message);
+        // Skins gérés par authlib-injector (-javaagent) sur toutes les instances (vanilla + moddé)
+
+        // Fetch current playtime bases before launch so renderer ticker starts correctly
+        let baseMinutes = 0, globalBaseMinutes = 0;
+        if (currentUser?.accessToken) {
+            try {
+                const headers = { 'Authorization': `Bearer ${currentUser.accessToken}` };
+                const safe = instanceFolderName.replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 128);
+                const ctrl = new AbortController();
+                setTimeout(() => ctrl.abort(), 3000);
+                const [instRes, profRes] = await Promise.all([
+                    fetch(`${HEXA_API}/profile/instance-playtime?folder=${encodeURIComponent(safe)}`, { headers, signal: ctrl.signal }),
+                    fetch(`${HEXA_API}/profile/${encodeURIComponent(currentUser.username || currentUser.uuid)}`, { headers }),
+                ]);
+                if (instRes.ok) baseMinutes = (await instRes.json()).total_minutes || 0;
+                if (profRes.ok) globalBaseMinutes = (await profRes.json()).profile?.total_playtime || 0;
+            } catch {}
         }
+        if (mainWindow) mainWindow.webContents.send('game-start', {
+            instanceFolder: instanceFolderName,
+            baseMinutes,
+            globalBaseMinutes,
+        });
 
         // Call Launcher Module
-        await launch(launchOptions, config, currentUser, mainWindow);
-        
+        await launch(launchOptions, config, mainWindow);
+
         // Keep launcher open during game (requested by user)
         // if (config.closeLauncher) mainWindow.hide();
         return { success: true };
@@ -982,13 +1818,14 @@ ipcMain.handle('launch-game', async (event, options) => {
 // LEGACY HANDLER
 ipcMain.handle('launch-game-legacy', async (event, options) => {
     console.log('Launch Game requested!');
-    if (mainWindow) mainWindow.webContents.send('log', 'Pr�paration du lancement...');
+    if (mainWindow) mainWindow.webContents.send('log', 'Preparing launch...');
     if (!currentUser) {
         return { success: false, message: "You must be logged in." };
     }
+    const _legacySessionStart = Date.now();
     if (currentUser.refreshToken) {
         try {
-            if (mainWindow) mainWindow.webContents.send('log', "Rafra�chissement du token Microsoft (Via API Secure)...");
+            if (mainWindow) mainWindow.webContents.send('log', "Refreshing Microsoft token (Secure API)...");
             console.log("Refreshing Microsoft Token via Auth API...");
             try {
                 const refreshRes = await fetch(AUTH_API_URL, {
@@ -1010,7 +1847,7 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
                 currentUser.refreshToken = newRefreshToken; 
             } catch (err) {
                  console.error("Secure Refresh Failed:", err);
-                 if (mainWindow) mainWindow.webContents.send('log', "Erreur rafra�chissement: " + err.message);
+                 if (mainWindow) mainWindow.webContents.send('log', "Refresh error: " + err.message);
                  throw err;
             }
             let mwAuth;
@@ -1084,7 +1921,7 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
             console.log("Token refreshed successfully for:", currentUser.username, "UUID:", currentUser.uuid);
         } catch (e) {
             console.error("Token Refresh Failed:", e);
-            let errorMessage = e.message || "Erreur inconnue";
+            let errorMessage = e.message || "Unknown error";
             if (e.response && typeof e.response.text === 'function') {
                 try {
                     const errorBody = await e.response.text();
@@ -1099,7 +1936,7 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
                  console.error("HINT: The Refresh Token was likely generated with a different Azure Client ID.");
                  console.error("Please ensure AZURE_CLIENT_ID in .env matches the one from your website.");
             }
-            return { success: false, message: "Failed to refresh Microsoft session. V�rifiez votre configuration (.env)." };
+            return { success: false, message: "Failed to refresh Microsoft session. Check your configuration (.env)." };
         }
     } else {
         if (currentUser.type === 'offline' || currentUser.type === 'hexa') {
@@ -1107,7 +1944,7 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
         } else if (currentUser.type !== 'microsoft' || !currentUser.accessToken) {
             console.error("No refresh token and no valid session found.");
             if (mainWindow) mainWindow.webContents.send('log', "No valid token found.");
-            return { success: false, message: "Erreur d'authentification: Session invalide/expir�e." };
+            return { success: false, message: "Authentication error: Invalid/expired session." };
         }
     }
     let gameVersion = "1.20.1";
@@ -1152,13 +1989,13 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
                         activeModpack = data.config.activeModpack;
                     }
                     if (data.config.maintenance) {
-                        return { success: false, message: "Le serveur est en maintenance." };
+                        return { success: false, message: "The server is under maintenance." };
                     }
                 }
             }
         } catch (e) {
             console.warn("Could not fetch remote config, using default version", e);
-            if (mainWindow) mainWindow.webContents.send('log', "Impossible de r�cup�rer la config serveur, mode hors ligne...");
+            if (mainWindow) mainWindow.webContents.send('log', "Unable to fetch server config, offline mode...");
         }
     }
 
@@ -1183,10 +2020,10 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
     if (activeModpack && !isCustom) {
         try {
             console.log("Active Modpack found:", activeModpack.name);
-            if (mainWindow) mainWindow.webContents.send('log', `Modpack d�tect�: ${activeModpack.name}`);
+            if (mainWindow) mainWindow.webContents.send('log', `Modpack détecté: ${activeModpack.name}`);
             let modpackUrl = activeModpack.url;
             if (modpackUrl.startsWith('/')) {
-                modpackUrl = `https://hgstudio.strator.gg${modpackUrl}`;
+                modpackUrl = `https://hexa-mc.fr${modpackUrl}`;
             }
             modpackUrl = encodeURI(modpackUrl) + `?t=${Date.now()}`;
             const installResult = await installMrPack(modpackUrl, rootPath, mainWindow);
@@ -1196,33 +2033,14 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
             }
         } catch (err) {
             console.error(err);
-            if (mainWindow) mainWindow.webContents.send('log', `Erreur Modpack: ${err.message}`);
-            return { success: false, message: "Erreur lors de l'installation du modpack: " + err.message };
+            if (mainWindow) mainWindow.webContents.send('log', `Modpack error: ${err.message}`);
+            return { success: false, message: "Error during modpack installation: " + err.message };
         }
     } else if (isCustom) {
          await fs.mkdir(rootPath, { recursive: true });
-         if (mainWindow) mainWindow.webContents.send('log', `Lancement personnalis�: ${customInstanceData.name}`);
+         if (mainWindow) mainWindow.webContents.send('log', `Lancement personnalisé: ${customInstanceData.name}`);
     }
-    let targetJavaVersion = 17;
-
-    // Detect required Java version
-    if (gameVersion) {
-        const parts = gameVersion.split('.').map(Number);
-        if (parts.length >= 2) {
-             const minor = parts[1];
-             const patch = parts[2] || 0;
-             // 1.20.5+ requires Java 21
-             if (minor > 20 || (minor === 20 && patch >= 5)) {
-                 targetJavaVersion = 21;
-             } else if (minor < 17) {
-                 // 1.16 and below typically use Java 8, but 1.18+ needs 17.
-                 // Let's stick to 17 for 1.18-1.19. For extremely old (1.12), maybe 8?
-                 // Current Modpacks are usually modern. 
-                 // If the user needs Java 8 for 1.12, add logic here.
-                 if (minor <= 16) targetJavaVersion = 8;
-             }
-        }
-    }
+    let targetJavaVersion = getRequiredJava(gameVersion);
 
     let javaPath = config[`javaPath${targetJavaVersion}`] || config.javaPath;
     if (!javaPath) {
@@ -1231,14 +2049,14 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
         } catch (error) {
             console.error('Java Setup Error:', error);
             if (mainWindow) mainWindow.webContents.send('log', `Java Error: ${error.message}`);
-            return { success: false, message: "Erreur lors de l'installation de Java." };
+            return { success: false, message: "Error during Java installation." };
         }
     }
     let authorization;
     if (!currentUser.accessToken) {
         console.error("Launch aborted: No access token available for user", currentUser.username);
-        if (mainWindow) mainWindow.webContents.send('log', "Erreur fatale: Token d'acc�s manquant.");
-        return { success: false, message: "Impossible de lancer le jeu : Session invalide (Token manquant)." };
+        if (mainWindow) mainWindow.webContents.send('log', "Erreur fatale: Token d'accès manquant.");
+        return { success: false, message: "Unable to launch game: Invalid session (missing token)." };
     }
     const formatUuid = (uuid) => {
         if (uuid && uuid.length === 32) {
@@ -1253,17 +2071,20 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
         hash[8] = (hash[8] & 0x3f) | 0x80;
         return formatUuid(hash.toString('hex'));
     };
-    const isOffline = currentUser.type === 'offline' || currentUser.type === 'hexa' || (currentUser.uuid && currentUser.uuid.includes('ffffffff'));
-    const finalUuid = isOffline ? generateOfflineUuid(currentUser.username) : formatUuid(currentUser.uuid);
+    const isOffline = currentUser.type === 'offline';
+    const isHexa = currentUser.type === 'hexa';
+    // Hexa : UUID réel de la BDD (ex: 77f67d70-bfe4-417b-9e61-b419d7a865fd)
+    // Offline : UUID dérivé du pseudo (mode sans serveur)
+    const finalUuid = isHexa ? currentUser.uuid : (isOffline ? generateOfflineUuid(currentUser.username) : formatUuid(currentUser.uuid));
 
     authorization = {
-        access_token: isOffline ? '0' : currentUser.accessToken,
-        client_token: finalUuid,
+        access_token: (isHexa || !isOffline) ? currentUser.accessToken : '0',
+        client_token: currentUser.clientToken || finalUuid,
         uuid: finalUuid,
         name: currentUser.username,
         user_properties: {},
         meta: {
-            type: isOffline ? "mojang" : "msa",
+            type: "mojang", // authlib-injector requires "mojang" type to intercept correctly
             demo: false
         }
     };
@@ -1273,10 +2094,13 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
     const customJvmArgs = config.jvmArgs ? config.jvmArgs.split(' ') : [];
     
     if (authlibPath) {
-        // Point to your Yggdrasil API Server
-        const yggdrasilUrl = "http://91.197.6.177:24607/api/yggdrasil";       
-        if (mainWindow) mainWindow.webContents.send('log', "Authlib-Injector charg� pour les skins !");
+        const yggdrasilUrl = "https://hexa-mc.fr/api/yggdrasil";
+        customJvmArgs.push(`-javaagent:${authlibPath}=${yggdrasilUrl}`);
+        customJvmArgs.push('-Djava.net.preferIPv4Stack=true');
+        if (mainWindow) mainWindow.webContents.send('log', `Authlib-Injector activé: ${yggdrasilUrl}`);
     }
+    // Required by NeoForge production mode
+    customJvmArgs.push(`-DlibraryDirectory=${path.join(rootPath, 'libraries')}`);
 
     const opts = {
         authorization: authorization,
@@ -1323,12 +2147,12 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
         const ip = parts[0];
         const port = parts[1] || '25565';
         console.log(`[Feature] Auto-Connect enabled for ${ip}:${port}`);
-        if (mainWindow) mainWindow.webContents.send('log', `Auto-Connect activ�: ${ip}:${port}`);
+        if (mainWindow) mainWindow.webContents.send('log', `Auto-Connect activé: ${ip}:${port}`);
         opts.customArgs.push('--server', ip);
         opts.customArgs.push('--port', port);
     } else if (config.autoConnectIP && isATM10) {
         console.log(`[Feature] Auto-Connect skipped for ATM10 (Prevent Registry Sync Crash)`);
-        if (mainWindow) mainWindow.webContents.send('log', `Auto-Connect d�sactiv� pour ATM10 (Compatibilit�).`);
+        if (mainWindow) mainWindow.webContents.send('log', `Auto-Connect désactivé pour ATM10 (Compatibilité).`);
     }
     try {
         const globalOptionsDir = path.join(rootPath, 'global-options');
@@ -1362,7 +2186,7 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
             const fabricUrl = `https://meta.fabricmc.net/v2/versions/loader/${gameVersion}/${fabricVersion}/profile/json`;
             const versionId = `fabric-loader-${fabricVersion}-${gameVersion}`;
             try {
-                if (mainWindow) mainWindow.webContents.send('log', `R�solution des d�pendances Vanilla...`);
+                if (mainWindow) mainWindow.webContents.send('log', `Résolution des dépendances Vanilla...`);
                 const manifestRes = await fetch('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json');
                 const manifest = await manifestRes.json();
                 const versionInfo = manifest.versions.find(v => v.id === gameVersion);
@@ -1375,7 +2199,7 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
                 const indexesDir = path.join(assetsDir, 'indexes');
                 const indexesPath = path.join(indexesDir, `${assetIndexId}.json`);
                 await fs.mkdir(indexesDir, { recursive: true });
-                if (mainWindow) mainWindow.webContents.send('log', `V�rification index assets ${assetIndexId}...`);
+                if (mainWindow) mainWindow.webContents.send('log', `Vérification index assets ${assetIndexId}...`);
                 const idxRes = await fetch(assetIndexUrl);
                 if (idxRes.ok) {
                     const idxData = await idxRes.text();
@@ -1388,7 +2212,7 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
                     JSON.stringify(vanillaJson, null, 2)
                 );
                 console.log(`[Re-Build] Saved Parent JSON: ${gameVersion}`);
-                if (mainWindow) mainWindow.webContents.send('log', `Pr�paration profil Fabric...`);
+                if (mainWindow) mainWindow.webContents.send('log', `Préparation profil Fabric...`);
                 const fabricRes = await fetch(fabricUrl);
                 if (!fabricRes.ok) throw new Error("Failed to download Fabric profile.");
                 const fabricJson = await fabricRes.json();
@@ -1447,7 +2271,7 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
                     JSON.stringify(fabricJson, null, 2)
                 );
                 console.log(`[Re-Build] Fabric Profile Ready: ${versionId}`);
-                if (mainWindow) mainWindow.webContents.send('log', `Profil Fabric install�.`);
+                if (mainWindow) mainWindow.webContents.send('log', `Profil Fabric installé.`);
             } catch (err) {
                 console.error("Critical verification error:", err);
                 if (mainWindow) mainWindow.webContents.send('log', `ERREUR CRITIQUE: ${err.message}`);
@@ -1462,7 +2286,7 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
             
             // 1. Download/Ensure Vanilla JSON exists (Critical for Inheritance)
             try {
-                if (mainWindow) mainWindow.webContents.send('log', `V�rification Vanilla ${gameVersion}...`);
+                if (mainWindow) mainWindow.webContents.send('log', `Vérification Vanilla ${gameVersion}...`);
                 const manifestRes = await fetch('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json');
                 const manifest = await manifestRes.json();
                 const versionInfo = manifest.versions.find(v => v.id === gameVersion);
@@ -1493,7 +2317,7 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
 
             try {
                 // Always download to ensure freshness or missing file
-                if (mainWindow) mainWindow.webContents.send('log', `T�l�chargement ${loaderConfig.type} installer...`);
+                if (mainWindow) mainWindow.webContents.send('log', `Téléchargement ${loaderConfig.type} installer...`);
                 /* Check if exists, maybe skip verify? For now, simple check. */
                 try { await fs.access(installerPath); } catch {
                     const res = await fetch(installerUrl);
@@ -1596,7 +2420,7 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
         }
     }
     if (rootPath) {
-        if (mainWindow) mainWindow.webContents.send('log', `V�rification int�grit� biblioth�ques...`);
+        if (mainWindow) mainWindow.webContents.send('log', `Vérification intégrité bibliothèques...`);
         const librariesPath = path.join(globalRoot, 'libraries');
         const versionsPath = path.join(rootPath, 'versions');
         await Promise.all([
@@ -1668,6 +2492,11 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
             debugWindow.webContents.executeJavaScript(js).catch(() => {});
         }
     };
+    launcher.removeAllListeners('debug');
+    launcher.removeAllListeners('data');
+    launcher.removeAllListeners('progress');
+    launcher.removeAllListeners('close');
+
     launcher.on('debug', (e) => {
         console.log('[DEBUG]', e);
         if (mainWindow) mainWindow.webContents.send('log', `[DEBUG] ${e}`);
@@ -1685,8 +2514,22 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
     launcher.on('progress', (e) => {
         if (mainWindow) mainWindow.webContents.send('log', `[Progress] ${e.type} - ${(e.task / e.total * 100).toFixed(0)}%`);
     });
-    launcher.on('close', (e) => {
+    launcher.on('close', async (e) => {
         console.log('Game closed', e);
+        const minutes = Math.floor((Date.now() - _legacySessionStart) / 60000);
+        if (minutes > 0 && currentUser?.accessToken) {
+            try {
+                await fetch(`${HEXA_API}/profile/playtime`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentUser.accessToken}` },
+                    body: JSON.stringify({ minutes, instanceFolder: instanceFolderName }),
+                });
+                console.log(`[Playtime] +${minutes} min reported (instance: ${instanceFolderName})`);
+                mainWindow?.webContents.send('instance-playtime-refresh', instanceFolderName);
+            } catch (err) {
+                console.warn('[Playtime] Failed to report:', err.message);
+            }
+        }
         if (mainWindow) {
             mainWindow.webContents.send('log', `Game closed with code ${e}`);
             mainWindow.webContents.send('stop-loading');
@@ -1718,6 +2561,29 @@ ipcMain.handle('launch-game-legacy', async (event, options) => {
         if (config.repairAssets) { // Hidden toggle or auto-repair logic could trigger this
              // For now, let's just log.
         }
+
+        // Notify renderer: game starting, pass base playtime for live ticker
+        let _legacyBase = 0, _legacyGlobalBase = 0;
+        if (currentUser?.accessToken) {
+            try {
+                const headers = { 'Authorization': `Bearer ${currentUser.accessToken}` };
+                const safe = instanceFolderName.replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 128);
+                const ctrl = new AbortController();
+                setTimeout(() => ctrl.abort(), 3000);
+                const [instRes, profRes] = await Promise.all([
+                    fetch(`${HEXA_API}/profile/instance-playtime?folder=${encodeURIComponent(safe)}`, { headers, signal: ctrl.signal }),
+                    fetch(`${HEXA_API}/profile/${encodeURIComponent(currentUser.username || currentUser.uuid)}`, { headers }),
+                ]);
+                if (instRes.ok) _legacyBase = (await instRes.json()).total_minutes || 0;
+                if (profRes.ok) _legacyGlobalBase = (await profRes.json()).profile?.total_playtime || 0;
+            } catch {}
+        }
+        if (mainWindow) mainWindow.webContents.send('game-start', {
+            instanceFolder: instanceFolderName,
+            baseMinutes: _legacyBase,
+            globalBaseMinutes: _legacyGlobalBase,
+        });
+
         await launcher.launch(opts);
     } catch (error) {
         console.error('Launch Error:', error);
@@ -1763,15 +2629,13 @@ ipcMain.on('close', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     win.close();
 });
-ipcMain.on('open-external', (event, url) => {
-    require('electron').shell.openExternal(url);
-});
+// Duplicate removed — handled by ipcMain.handle above
 ipcMain.handle('install-update', async (event, url) => {
     const tempDir = app.getPath('temp');
     const installerPath = path.join(tempDir, 'launcher-setup.exe');
 
     try {
-        if (mainWindow) mainWindow.webContents.send('log', "T�l�chargement de la mise � jour...");
+        if (mainWindow) mainWindow.webContents.send('log', "Téléchargement de la mise à jour...");
         const response = await fetch(url);
         if (!response.ok) throw new Error(`Failed to download update: ${response.statusText}`);
         
@@ -1839,9 +2703,7 @@ ipcMain.handle('get-system-info', () => {
         freeMem: os.freemem()
     };
 });
-ipcMain.handle('get-app-version', () => {
-    return app.getVersion();
-});
+// ipcMain.handle('get-app-version' - Removed duplicate
 ipcMain.handle('get-themes', async () => {
     const themesDir = path.join(__dirname, 'assets', 'themes');
     const themes = [];
@@ -1909,13 +2771,15 @@ ipcMain.handle('get-themes', async () => {
     }
     return themes;
 });
-ipcMain.handle('open-file-dialog', async (event, filters = []) => {
-    let appliedFilters = [{ name: 'Executables', extensions: ['exe', 'bin'] }];
-    if (filters && filters.length > 0) {
-        appliedFilters = filters;
-    }
+ipcMain.handle('open-file-dialog', async (event, options = {}) => {
+    // Accept either an options object {filters, properties} or a bare filters array
+    const opts = Array.isArray(options) ? { filters: options } : options;
+    const appliedFilters = (opts.filters && opts.filters.length > 0)
+        ? opts.filters
+        : [{ name: 'Executables', extensions: ['exe', 'bin'] }];
+    const properties = opts.properties || ['openFile'];
     const result = await dialog.showOpenDialog(mainWindow, {
-        properties: ['openFile'],
+        properties,
         filters: appliedFilters
     });
     if (result.canceled) {
@@ -2150,19 +3014,7 @@ ipcMain.handle('get-user-capes', async (event, username) => {
     }
     return data;
 });
-ipcMain.handle('fetch-image-base64', async (event, url) => {
-    try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("Failed to fetch");
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        const base64 = buffer.toString('base64');
-        return `data:image/png;base64,${base64}`;
-    } catch (e) {
-        console.error("Fetch Base64 Error:", e);
-        return null;
-    }
-});
+// ipcMain.handle('fetch-image-base64' - Removed duplicate
 ipcMain.handle('set-account-skin', async (event, { uuid, type, skinPath }) => {
     console.log(`[Skin] Setting skin for ${uuid} (${type}) to ${skinPath}`);
     if (type === 'hexa' || type === 'offline') {
@@ -2590,6 +3442,7 @@ ipcMain.handle('get-instance-mods', async (event, instPath) => {
             const isEnabled = !jar.endsWith('.disabled');
             const meta = await parseModMetadata(path.join(modsFolder, jar), jar);
             meta.isEnabled = isEnabled;
+            meta.jar = jar;
             if (meta.name === jar) {
                 meta.name = jar.replace('.disabled', '');
             }
@@ -2605,6 +3458,7 @@ ipcMain.handle('get-instance-mods', async (event, instPath) => {
 
 ipcMain.handle('get-instance-content', async (event, instPath) => {
     try {
+        if (!instPath) return { mods: [], resourcepacks: [], shaders: [] };
         const absPath = path.isAbsolute(instPath) ? instPath : path.join(app.getPath("appData"), ".hexa", "instances", instPath);
         const result = { mods: [], resourcepacks: [], shaders: [] };
 
@@ -2619,6 +3473,7 @@ ipcMain.handle('get-instance-content', async (event, instPath) => {
                 const meta = await parseModMetadata(path.join(modsDir, jar), jar);
                 meta.isEnabled = !jar.endsWith('.disabled');
                 meta.subDir = 'mods';
+                meta.jar = jar;
                 if (meta.name === jar) meta.name = jar.replace(/\.disabled$/, '');
                 result.mods.push(meta);
             }
@@ -2761,7 +3616,7 @@ ipcMain.handle('open-instance-folder', async (event, type) => {
 });
 async function enforceAntiCheat(installPath, mainWindow) {
     console.log("[Anti-Cheat] Starting verification...");
-    if (mainWindow) mainWindow.webContents.send('log', "Anti-Cheat: V�rification des fichiers...");
+    if (mainWindow) mainWindow.webContents.send('log', "Anti-Cheat: Vérification des fichiers...");
     const forbiddenKeywords = ['xray', 'x-ray', 'killaura']; 
     const modsPath = path.join(installPath, 'mods');
     const resourcePacksPath = path.join(installPath, 'resourcepacks');
@@ -2812,7 +3667,7 @@ async function installMrPack(url, installPath, mainWindow) {
     const packPath = path.join(tempDir, 'modpack.mrpack');
     try {
         await fs.mkdir(tempDir, { recursive: true });
-        if (mainWindow) mainWindow.webContents.send('log', `Nettoyage de l'instance avant mise � jour...`);
+        if (mainWindow) mainWindow.webContents.send('log', `Nettoyage de l'instance avant mise à jour...`);
         const modsFolder = path.join(installPath, 'mods');
         try {
             await fs.rm(modsFolder, { recursive: true, force: true });
@@ -2841,7 +3696,7 @@ async function installMrPack(url, installPath, mainWindow) {
         } catch (e) {
             console.warn("Cleanup warning (first run?):", e.message);
         }
-        if (mainWindow) mainWindow.webContents.send('log', `T�l�chargement du modpack...`);
+        if (mainWindow) mainWindow.webContents.send('log', `Downloading modpack...`);
         console.log("Downloading modpack from", url);
         const res = await fetch(url, { headers: { "User-Agent": "HexaLauncher/1.0 (contact@strator.gg)" } });
         if (!res.ok) throw new Error(`Failed to download modpack: ${res.statusText}`);
@@ -2909,7 +3764,7 @@ async function installMrPack(url, installPath, mainWindow) {
         const files = index.files;
         const totalFiles = files.length;
         let downloaded = 0;
-        if (mainWindow) mainWindow.webContents.send('log', `V�rification des ${totalFiles} mods...`);
+        if (mainWindow) mainWindow.webContents.send('log', `Vérification des ${totalFiles} mods...`);
         const allowedMods = [];
         for (const file of files) {
             const filePath = path.join(installPath, file.path);
@@ -2956,11 +3811,11 @@ async function installMrPack(url, installPath, mainWindow) {
             }
             downloaded++;
             if (mainWindow && downloaded % 5 === 0) {
-                 mainWindow.webContents.send('log', `V�rification/Installation: ${downloaded}/${totalFiles}`);
+                 mainWindow.webContents.send('log', `Vérification/Installation: ${downloaded}/${totalFiles}`);
             }
         }
         try {
-            const whitelistPath = path.join(installPath, 'whitelist.json');
+            const whitelistPath = path.join(installPath, 'hexa_modlist.json');
             await fs.writeFile(whitelistPath, JSON.stringify(allowedMods, null, 2));
             console.log(`[Anti-Cheat] Whitelist saved with ${allowedMods.length} mods.`);
         } catch (e) {
@@ -2982,7 +3837,7 @@ async function installMrPack(url, installPath, mainWindow) {
         }
         try {
             await fs.access(overridesDir);
-            if (mainWindow) mainWindow.webContents.send('log', `Installation des configurations (Overrides)...`);
+            if (mainWindow) mainWindow.webContents.send('log', `Installing configuration overrides...`);
             console.log("Copying overrides from:", overridesDir);
             await copyDir(overridesDir, installPath);
         } catch (e) {
@@ -3126,24 +3981,78 @@ function getUniqueInstanceFolder(name) {
 }
 
 ipcMain.handle('create-instance', async (event, data) => {
-    const { name, version, loader, cloudSync } = data;
+    const { name, version, loader, loaderVersion, cloudSync } = data;
     console.log('Create Instance Request:', data);
 
-    const folder = getUniqueInstanceFolder(name);
-    const rootPath = path.join(app.getPath('appData'), '.hexa');
-    const instancePath = path.join(rootPath, 'instances', folder);
+    const folder    = getUniqueInstanceFolder(name);
+    const globalRoot = path.join(app.getPath('appData'), '.hexa');
+    const instancePath = path.join(globalRoot, 'instances', folder);
+
+    const send = (percent, label) => {
+        if (mainWindow) mainWindow.webContents.send('install-progress', { instance: folder, percent, msg: label });
+    };
 
     try {
-        // 1. Create Folder + standard subdirectories
+        // 1. Create folder structure
         await fs.mkdir(instancePath, { recursive: true });
         for (const sub of ['mods', 'resourcepacks', 'screenshots', 'config', 'shaderpacks']) {
             await fs.mkdir(path.join(instancePath, sub), { recursive: true });
         }
         console.log(`[Instance] Created: ${instancePath} (${version}, ${loader})`);
-        if (mainWindow) mainWindow.webContents.send('log', `Instance "${name}" created (${version}, ${loader})`);
-        return { success: true, path: instancePath, folder };
+        send(0, `Preparing instance "${name}"...`);
+
+        // 2. Ensure Java
+        const javaVer  = getRequiredJava(version);
+        let   javaPath = null;
+        try {
+            send(1, `Vérification Java ${javaVer}...`);
+            javaPath = await ensureJava(globalRoot, mainWindow, javaVer);
+        } catch (e) {
+            console.warn('[create-instance] Java setup failed:', e.message);
+        }
+
+        // 3. Resolve loader version if not provided
+        const loaderType = (loader && loader !== 'vanilla') ? loader.toLowerCase() : null;
+        let resolvedLoaderVersion = loaderVersion || null;
+        if (loaderType && !resolvedLoaderVersion) {
+            send(2, `Résolution version ${loaderType}...`);
+            resolvedLoaderVersion = await getLatestLoaderVersion(loaderType, version);
+            console.log(`[create-instance] Resolved ${loaderType} version: ${resolvedLoaderVersion}`);
+        }
+
+        // 4. Install vanilla + modloader — each phase gets its own IPC event
+        const loaderLabel = loaderType
+            ? loaderType.charAt(0).toUpperCase() + loaderType.slice(1)
+            : null;
+
+        const { installInstance } = require('./launcher');
+        await installInstance(
+            { gameVersion: version, loader: loaderType || 'vanilla', loaderVersion: resolvedLoaderVersion, rootPath: globalRoot, javaPath },
+            ({ phase, percent, label }) => {
+                if (phase === 'vanilla') {
+                    if (mainWindow) mainWindow.webContents.send('install-progress', {
+                        instance: folder, phase: 'vanilla',
+                        percent, msg: label,
+                        title: `Téléchargement Minecraft ${version}`,
+                    });
+                } else {
+                    if (mainWindow) mainWindow.webContents.send('install-progress', {
+                        instance: folder, phase: 'loader',
+                        percent, msg: label,
+                        title: `Installation ${loaderLabel} ${resolvedLoaderVersion || ''}`.trim(),
+                    });
+                }
+            },
+        );
+
+        if (mainWindow) mainWindow.webContents.send('install-progress', {
+            instance: folder, phase: 'done', percent: 100,
+            msg: `Instance "${name}" prête !`, title: name,
+        });
+        return { success: true, path: instancePath, folder, loaderVersion: resolvedLoaderVersion };
     } catch (e) {
         console.error('Create Instance Failed:', e);
+        if (mainWindow) mainWindow.webContents.send('install-progress', { instance: folder, percent: -1, msg: e.message });
         return { success: false, error: e.message };
     }
 });
@@ -3369,6 +4278,7 @@ ipcMain.handle('install-content', async (event, data) => {
         let subDir = 'mods';
         if (type === 'shader') subDir = 'shaderpacks';
         if (type === 'resourcepack') subDir = 'resourcepacks';
+        if (type === 'datapack') subDir = 'datapacks';
         const destDir = require('path').join(rootPath, 'instances', folderName, subDir);
         const dest = require('path').join(destDir, fileName);
         
@@ -3390,14 +4300,28 @@ ipcMain.handle('install-modpack', async (event, data) => {
         const { url, name, folderName } = data;
         const rootPath = require('path').join(require('electron').app.getPath('appData'), '.hexa');
         const instancePath = require('path').join(rootPath, 'instances', folderName);
+        await fs.mkdir(instancePath, { recursive: true });
 
-        await installModrinthPack(url, instancePath, (progress, message) => {
+        // Download the .mrpack to a temp file first — ADM-ZIP needs a local path
+        const packPath = require('path').join(instancePath, '_pack.mrpack');
+        event.sender.send('log', '0%: Downloading modpack…');
+        const dlRes = await fetch(url, { headers: { 'User-Agent': 'HexaLauncher/1.0' } });
+        if (!dlRes.ok) throw new Error(`Failed to download modpack: ${dlRes.statusText}`);
+        const fileStream = fsOriginal.createWriteStream(packPath);
+        await new Promise((resolve, reject) => {
+            dlRes.body.pipe(fileStream);
+            dlRes.body.on('error', reject);
+            fileStream.on('finish', resolve);
+        });
+
+        await installModrinthPack(packPath, instancePath, (progress, message) => {
             if (mainWindow) {
                 event.sender.send('log', progress + '%: ' + message);
                 event.sender.send('install-progress', { instance: folderName, percent: progress, msg: message });
             }
         });
 
+        await fs.rm(packPath, { force: true }).catch(() => {});
         return { success: true, path: instancePath };
     } catch (e) {
         console.error('Install Modpack Failed:', e);
